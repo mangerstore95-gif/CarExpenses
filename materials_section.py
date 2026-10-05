@@ -3,6 +3,20 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 import os
 
+from materials_edit import (
+    get_batches_with_remaining,
+    get_issued_for_batch,
+    load_batches,
+    load_issues,
+    load_materials,
+    load_warehouses,
+    load_materials_settings,
+    save_batch as save_batch_ext,
+    save_issue as save_issue_ext,
+    edit_batch_dialog,
+    delete_batch_dialog
+)
+
 # ==================== الملفات ====================
 MATERIALS_FILE = "materials.xlsx"
 WAREHOUSES_FILE = "warehouses.xlsx"
@@ -38,15 +52,12 @@ DEFAULT_SETTINGS = {
 
 # ==================== دوال تهيئة الملفات ====================
 def init_materials_files():
-    # ملف الأصناف
     if not os.path.exists(MATERIALS_FILE):
         pd.DataFrame({"الصنف": DEFAULT_MATERIALS}).to_excel(MATERIALS_FILE, index=False)
     
-    # ملف المخازن
     if not os.path.exists(WAREHOUSES_FILE):
         pd.DataFrame({"المخزن": DEFAULT_WAREHOUSES}).to_excel(WAREHOUSES_FILE, index=False)
     
-    # ملف الدفعات
     if not os.path.exists(BATCHES_FILE):
         df = pd.DataFrame(columns=[
             "رقم الدفعة", "الصنف", "المخزن", "تاريخ الإنتاج", "تاريخ الانتهاء",
@@ -55,7 +66,6 @@ def init_materials_files():
         ])
         df.to_excel(BATCHES_FILE, index=False)
     
-    # ملف الصرف
     if not os.path.exists(ISSUES_FILE):
         df = pd.DataFrame(columns=[
             "رقم الصرف", "التاريخ", "رقم الدفعة", "الصنف", "المخزن",
@@ -63,45 +73,8 @@ def init_materials_files():
         ])
         df.to_excel(ISSUES_FILE, index=False)
     
-    # ملف الإعدادات
     if not os.path.exists(MATERIALS_SETTINGS_FILE):
         pd.DataFrame([DEFAULT_SETTINGS]).to_excel(MATERIALS_SETTINGS_FILE, index=False)
-
-# ==================== دوال تحميل البيانات ====================
-def load_materials():
-    try:
-        df = pd.read_excel(MATERIALS_FILE)
-        return df["الصنف"].dropna().astype(str).tolist()
-    except:
-        return DEFAULT_MATERIALS
-
-def load_warehouses():
-    try:
-        df = pd.read_excel(WAREHOUSES_FILE)
-        return df["المخزن"].dropna().astype(str).tolist()
-    except:
-        return DEFAULT_WAREHOUSES
-
-def load_batches():
-    try:
-        df = pd.read_excel(BATCHES_FILE)
-        return df
-    except:
-        return pd.DataFrame()
-
-def load_issues():
-    try:
-        df = pd.read_excel(ISSUES_FILE)
-        return df
-    except:
-        return pd.DataFrame()
-
-def load_materials_settings():
-    try:
-        df = pd.read_excel(MATERIALS_SETTINGS_FILE)
-        return df.iloc[0].to_dict()
-    except:
-        return DEFAULT_SETTINGS
 
 # ==================== دوال الحفظ ====================
 def save_material(name):
@@ -133,30 +106,8 @@ def save_issue(issue_data):
 def save_materials_settings(settings):
     pd.DataFrame([settings]).to_excel(MATERIALS_SETTINGS_FILE, index=False)
 
-# ==================== دوال الحسابات ====================
-def get_batches_with_remaining(batches_df):
-    """يرجع الدفعات مع الكمية المتبقية محسوبة"""
-    if batches_df.empty:
-        return batches_df
-    
-    issues_df = load_issues()
-    
-    batches_df = batches_df.copy()
-    batches_df["الكمية الكلية (كجم)"] = pd.to_numeric(batches_df["الكمية الكلية (كجم)"], errors="coerce")
-    
-    if issues_df.empty:
-        batches_df["الكمية المصروفة (كجم)"] = 0
-    else:
-        issues_df["الكمية المصروفة (كجم)"] = pd.to_numeric(issues_df["الكمية المصروفة (كجم)"], errors="coerce")
-        issued = issues_df.groupby("رقم الدفعة")["الكمية المصروفة (كجم)"].sum()
-        batches_df["الكمية المصروفة (كجم)"] = batches_df["رقم الدفعة"].map(issued).fillna(0)
-    
-    batches_df["الكمية المتبقية (كجم)"] = batches_df["الكمية الكلية (كجم)"] - batches_df["الكمية المصروفة (كجم)"]
-    
-    return batches_df
-
+# ==================== دوال الحساب ====================
 def get_expiry_status(expiry_date, warning_days=30, critical_days=7):
-    """يرجع حالة الصلاحية: صالح / قريب الانتهاء / منتهي"""
     try:
         exp = pd.to_datetime(expiry_date).date()
         today = date.today()
@@ -174,9 +125,7 @@ def get_expiry_status(expiry_date, warning_days=30, critical_days=7):
         return "غير محدد", None, "⚪"
 
 def get_total_stock_by_material():
-    """إجمالي الرصيد لكل صنف في كل المخازن"""
     batches = load_batches()
-    
     if batches.empty:
         return pd.DataFrame()
     
@@ -186,13 +135,10 @@ def get_total_stock_by_material():
     total = batches.groupby("الصنف")["الكمية المتبقية (كجم)"].sum().reset_index()
     total.columns = ["الصنف", "الإجمالي (كجم)"]
     total = total.sort_values("الإجمالي (كجم)", ascending=False)
-    
     return total
 
 def get_stock_by_warehouse():
-    """إجمالي الرصيد لكل مخزن"""
     batches = load_batches()
-    
     if batches.empty:
         return pd.DataFrame()
     
@@ -202,13 +148,10 @@ def get_stock_by_warehouse():
     total = batches.groupby("المخزن")["الكمية المتبقية (كجم)"].sum().reset_index()
     total.columns = ["المخزن", "الإجمالي (كجم)"]
     total = total.sort_values("الإجمالي (كجم)", ascending=False)
-    
     return total
 
 def get_expiring_batches():
-    """الدفعات اللي قربت تنتهي أو منتهية"""
     batches = load_batches()
-    
     if batches.empty:
         return pd.DataFrame()
     
@@ -241,8 +184,6 @@ def get_expiring_batches():
 
 # ==================== دالة القسم الرئيسية ====================
 def render_materials_section():
-    """القسم الكامل لصلاحية المواد الخام"""
-    
     init_materials_files()
     
     materials_list = load_materials()
@@ -252,7 +193,6 @@ def render_materials_section():
     st.markdown("### إدارة دفعات المواد الخام وتنبيهات الصلاحية")
     st.markdown("---")
     
-    # ==================== التبويبات ====================
     tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 لوحة المعلومات",
         "➕ استلام مواد",
@@ -274,7 +214,6 @@ def render_materials_section():
             batches_with_rem = get_batches_with_remaining(batches)
             batches_active = batches_with_rem[batches_with_rem["الكمية المتبقية (كجم)"] > 0]
             
-            # ==================== KPI Cards ====================
             total_weight = batches_active["الكمية المتبقية (كجم)"].sum()
             total_batches = len(batches_active)
             total_materials = batches_active["الصنف"].nunique()
@@ -321,7 +260,7 @@ def render_materials_section():
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("---")
             
-            # ==================== تنبيهات الصلاحية ====================
+            # تنبيهات الصلاحية
             st.markdown("### 🚨 تنبيهات الصلاحية")
             
             expiring = get_expiring_batches()
@@ -335,7 +274,6 @@ def render_materials_section():
                 
                 st.markdown(f"**عدد الدفعات اللي محتاجة انتباه: {len(expiring)}** (فترة التحذير: {warning_days} يوم)")
                 
-                # نلون حسب الحالة
                 for idx, row in expiring.iterrows():
                     days = row["أيام متبقية"]
                     
@@ -374,21 +312,15 @@ def render_materials_section():
             
             st.markdown("---")
             
-            # ==================== إجمالي الأرصدة لكل صنف ====================
             st.markdown("### 📦 إجمالي الأرصدة حسب الصنف")
-            
             total_stock = get_total_stock_by_material()
-            
             if not total_stock.empty:
                 st.dataframe(total_stock, use_container_width=True, hide_index=True)
             
             st.markdown("---")
             
-            # ==================== الرصيد حسب المخزن ====================
             st.markdown("### 🏭 الرصيد حسب المخزن")
-            
             stock_wh = get_stock_by_warehouse()
-            
             if not stock_wh.empty:
                 st.dataframe(stock_wh, use_container_width=True, hide_index=True)
     
@@ -396,16 +328,15 @@ def render_materials_section():
     with tab1:
         st.subheader("➕ استلام دفعة مواد خام جديدة")
         
-        # رقم دفعة تلقائي
         batches = load_batches()
         if batches.empty:
-            next_batch_num = "BATCH-001"
+            next_batch_num = "BATCH-0001"
         else:
             try:
                 last_num = len(batches) + 1
-                next_batch_num = f"BATCH-{last_num:03d}"
+                next_batch_num = f"BATCH-{last_num:04d}"
             except:
-                next_batch_num = f"BATCH-{len(batches)+1:03d}"
+                next_batch_num = f"BATCH-{len(batches)+1:04d}"
         
         col1, col2 = st.columns(2)
         
@@ -448,7 +379,6 @@ def render_materials_section():
                 for err in errors:
                     st.error(f"⚠️ {err}")
             else:
-                # نتحقق من رقم الدفعة
                 existing = batches[batches["رقم الدفعة"].astype(str) == batch_no.strip()] if not batches.empty else pd.DataFrame()
                 if not existing.empty:
                     st.error(f"🚫 رقم الدفعة ({batch_no}) مستخدم من قبل!")
@@ -485,7 +415,6 @@ def render_materials_section():
             if available.empty:
                 st.warning("⚠️ مفيش أرصدة متاحة للصرف")
             else:
-                # رقم صرف تلقائي
                 issues_df = load_issues()
                 next_issue_no = f"ISSUE-{len(issues_df)+1:04d}"
                 
@@ -496,7 +425,6 @@ def render_materials_section():
                     issue_date = st.date_input("📅 تاريخ الصرف *", value=date.today(), key="mat_issue_date")
                 
                 with col2:
-                    # نعرض الدفعات المتاحة للاختيار
                     batch_options = []
                     for idx, row in available.iterrows():
                         label = f"{row['رقم الدفعة']} | {row['الصنف']} | {row['المخزن']} | متبقي: {row['الكمية المتبقية (كجم)']:,.0f} كجم | ينتهي: {row['تاريخ الانتهاء']}"
@@ -504,7 +432,6 @@ def render_materials_section():
                     
                     selected_batch = st.selectbox("📦 اختار الدفعة *", ["-- اختر --"] + batch_options, key="mat_issue_batch")
                 
-                # معلومات الدفعة المختارة
                 selected_batch_row = None
                 if selected_batch != "-- اختر --":
                     batch_no_selected = selected_batch.split(" | ")[0].strip()
@@ -560,7 +487,80 @@ def render_materials_section():
                         save_issue(issue_data)
                         st.success(f"✅ تم صرف {issue_qty:,.0f} كجم من دفعة {selected_batch_row['رقم الدفعة']}")
                         st.balloons()
-    
+            
+            # ==================== سجل الصرف ====================
+            st.markdown("---")
+            st.markdown("### 📋 سجل عمليات الصرف")
+            
+            issues = load_issues()
+            
+            if issues.empty:
+                st.info("📭 مفيش عمليات صرف مسجلة")
+            else:
+                st.caption("💡 علّم على ☑ في عمود 'اختر' لتعديل أو حذف سند الصرف")
+                
+                df_issues = issues.copy()
+                df_issues["الكمية المصروفة (كجم)"] = pd.to_numeric(df_issues["الكمية المصروفة (كجم)"], errors="coerce")
+                df_issues.insert(0, "اختر", False)
+                
+                display_cols = ["اختر", "رقم الصرف", "التاريخ", "رقم الدفعة", "الصنف", "المخزن", "الكمية المصروفة (كجم)", "الجهة/الطلب", "ملاحظات"]
+                df_display = df_issues[display_cols].copy()
+                
+                for col in df_display.columns:
+                    if col not in ["اختر", "الكمية المصروفة (كجم)"]:
+                        df_display[col] = df_display[col].astype(str)
+                
+                edited_issues = st.data_editor(
+                    df_display,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=400,
+                    key="issues_editor",
+                    column_config={
+                        "اختر": st.column_config.CheckboxColumn("اختر", default=False, width="small"),
+                        "رقم الصرف": st.column_config.TextColumn("🔢 رقم الصرف", width="small"),
+                        "التاريخ": st.column_config.TextColumn("📅 التاريخ", width="small"),
+                        "رقم الدفعة": st.column_config.TextColumn("📦 الدفعة", width="small"),
+                        "الصنف": st.column_config.TextColumn("🏷️ الصنف", width="medium"),
+                        "المخزن": st.column_config.TextColumn("🏭 المخزن", width="small"),
+                        "الكمية المصروفة (كجم)": st.column_config.NumberColumn("⚖️ الكمية", format="%.0f", width="small"),
+                        "الجهة/الطلب": st.column_config.TextColumn("🎯 الجهة", width="medium"),
+                        "ملاحظات": st.column_config.TextColumn("📝 ملاحظات", width="medium"),
+                    }
+                )
+                
+                st.markdown("---")
+                st.markdown("### 🔧 إجراءات على سندات الصرف")
+                
+                col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 3])
+                
+                with col_btn1:
+                    if st.button("✏️ تعديل السند المحدد", use_container_width=True, type="primary"):
+                        selected = edited_issues[edited_issues["اختر"] == True]
+                        if len(selected) == 0:
+                            st.warning("⚠️ علّم على سند أولًا")
+                        elif len(selected) > 1:
+                            st.error("⚠️ اختار سند واحد بس")
+                        else:
+                            issue_no_sel = str(selected.iloc[0]["رقم الصرف"])
+                            st.session_state["edit_issue"] = issue_no_sel
+                            st.rerun()
+                
+                with col_btn2:
+                    if st.button("🗑️ حذف السند المحدد", use_container_width=True):
+                        selected = edited_issues[edited_issues["اختر"] == True]
+                        if len(selected) == 0:
+                            st.warning("⚠️ علّم على سند أولًا")
+                        elif len(selected) > 1:
+                            st.error("⚠️ اختار سند واحد بس")
+                        else:
+                            issue_no_sel = str(selected.iloc[0]["رقم الصرف"])
+                            st.session_state["delete_issue"] = issue_no_sel
+                            st.rerun()
+                
+                with col_btn3:
+                    st.markdown(f"**إجمالي المصروف:** {df_issues['الكمية المصروفة (كجم)'].sum():,.0f} كجم من **{len(df_issues)}** سند")
+
     # ==================== تبويب 3: عرض المخزون ====================
     with tab3:
         st.subheader("📋 عرض المخزون الحالي")
@@ -572,7 +572,6 @@ def render_materials_section():
         else:
             batches_with_rem = get_batches_with_remaining(batches)
             
-            # فلاتر
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 filter_mat = st.selectbox("🏷️ الصنف", ["الكل"] + materials_list, key="stock_filter_mat")
@@ -594,7 +593,6 @@ def render_materials_section():
             if filter_wh != "الكل":
                 filtered = filtered[filtered["المخزن"] == filter_wh]
             
-            # نحسب حالة الصلاحية
             settings = load_materials_settings()
             warning_days = int(settings.get("مدة التنبيه (يوم)", 30))
             critical_days = int(settings.get("مدة التحذير الأقصى (يوم)", 7))
@@ -613,19 +611,158 @@ def render_materials_section():
                 filtered = filtered[filtered["حالة الصلاحية"].str.contains("منتهي")]
             
             st.markdown(f"**عدد الدفعات: {len(filtered)}**")
+            st.caption("💡 علّم على ☑ في عمود 'اختر' لتعديل أو حذف الدفعة")
             
-            # الأعمدة اللي نعرضها
-            display_cols = ["رقم الدفعة", "الصنف", "المخزن", "تاريخ الانتهاء", "أيام متبقية", "حالة الصلاحية", "الكمية الكلية (كجم)", "الكمية المصروفة (كجم)", "الكمية المتبقية (كجم)", "تاريخ الوصول"]
-            
-            if not filtered.empty:
-                st.dataframe(filtered[display_cols], use_container_width=True, hide_index=True)
-                
-                # إجمالي
-                total = filtered["الكمية المتبقية (كجم)"].sum()
-                st.markdown(f"### 💰 إجمالي الرصيد المعروض: **{total:,.0f} كجم**")
-            else:
+            if filtered.empty:
                 st.warning("⚠️ مفيش نتائج مطابقة للفلاتر")
+            else:
+                df_editor = filtered.copy()
+                df_editor.insert(0, "اختر", False)
+                
+                display_cols = ["اختر", "رقم الدفعة", "الصنف", "المخزن", "تاريخ الانتهاء", "أيام متبقية", "حالة الصلاحية", "الكمية الكلية (كجم)", "الكمية المصروفة (كجم)", "الكمية المتبقية (كجم)", "تاريخ الوصول"]
+                df_display = df_editor[display_cols].copy()
+                
+                for col in df_display.columns:
+                    if col not in ["اختر", "الكمية الكلية (كجم)", "الكمية المصروفة (كجم)", "الكمية المتبقية (كجم)", "أيام متبقية"]:
+                        df_display[col] = df_display[col].astype(str)
+                
+                edited_df = st.data_editor(
+                    df_display,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=500,
+                    key="stock_editor",
+                    column_config={
+                        "اختر": st.column_config.CheckboxColumn("اختر", default=False, width="small"),
+                        "رقم الدفعة": st.column_config.TextColumn("🔢 رقم الدفعة", width="small"),
+                        "الصنف": st.column_config.TextColumn("🏷️ الصنف", width="medium"),
+                        "المخزن": st.column_config.TextColumn("🏭 المخزن", width="small"),
+                        "تاريخ الانتهاء": st.column_config.TextColumn("⏰ الانتهاء", width="small"),
+                        "أيام متبقية": st.column_config.NumberColumn("⏳ أيام", width="small"),
+                        "حالة الصلاحية": st.column_config.TextColumn("📊 الحالة", width="small"),
+                        "الكمية الكلية (كجم)": st.column_config.NumberColumn("📦 الكلية", format="%.0f", width="small"),
+                        "الكمية المصروفة (كجم)": st.column_config.NumberColumn("📤 المصروفة", format="%.0f", width="small"),
+                        "الكمية المتبقية (كجم)": st.column_config.NumberColumn("✅ المتبقية", format="%.0f", width="small"),
+                        "تاريخ الوصول": st.column_config.TextColumn("📅 الوصول", width="small"),
+                    }
+                )
+                
+                st.markdown("---")
+                st.markdown("### 🔧 إجراءات على الدفعات المحددة")
+                
+                col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 3])
+                
+                with col_btn1:
+                    if st.button("✏️ تعديل المحدد", use_container_width=True, type="primary"):
+                        selected = edited_df[edited_df["اختر"] == True]
+                        if len(selected) == 0:
+                            st.warning("⚠️ علّم على دفعة أولًا")
+                        elif len(selected) > 1:
+                            st.error("⚠️ اختار دفعة واحدة بس")
+                        else:
+                            batch_no = str(selected.iloc[0]["رقم الدفعة"])
+                            st.session_state["edit_batch"] = batch_no
+                            st.rerun()
+                
+                with col_btn2:
+                    if st.button("🗑️ حذف المحدد", use_container_width=True):
+                        selected = edited_df[edited_df["اختر"] == True]
+                        if len(selected) == 0:
+                            st.warning("⚠️ علّم على دفعة أولًا")
+                        elif len(selected) > 1:
+                            st.error("⚠️ اختار دفعة واحدة بس")
+                        else:
+                            batch_no = str(selected.iloc[0]["رقم الدفعة"])
+                            st.session_state["delete_batch"] = batch_no
+                            st.rerun()
+                
+                with col_btn3:
+                    st.markdown("💡 **ملاحظة:** لتعديل أو حذف دفعة، علّم على ☑ جنبها واضغط الزر المناسب")
+                
+                total = filtered["الكمية المتبقية (كجم)"].sum()
+                st.markdown("---")
+                st.markdown(f"### 💰 إجمالي الرصيد المعروض: **{total:,.0f} كجم**")
+
+    # ==================== نافذة تعديل الصرف ====================
+    if st.session_state.get("edit_issue"):
+        issue_no = st.session_state["edit_issue"]
+        issues = load_issues()
+        match = issues[issues["رقم الصرف"].astype(str) == str(issue_no)]
+        
+        if match.empty:
+            st.session_state["edit_issue"] = None
+        else:
+            row = match.iloc[0]
+            
+            @st.dialog("✏️ تعديل سند الصرف", width="large")
+            def edit_issue_dialog():
+                st.markdown(f"**رقم السند:** `{issue_no}`")
+                st.markdown("---")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    try:
+                        cur_date = pd.to_datetime(row["التاريخ"]).date()
+                    except:
+                        cur_date = date.today()
+                    new_date = st.date_input("📅 التاريخ", value=cur_date, key="edit_issue_date")
+                    
+                    new_qty = st.number_input("⚖️ الكمية المصروفة (كجم)", min_value=0.0, step=10.0, value=float(row["الكمية المصروفة (كجم)"]), key="edit_issue_qty")
+                
+                with col2:
+                    new_to = st.text_input("🎯 الجهة/الطلب", value=str(row["الجهة/الطلب"]), key="edit_issue_to")
+                    new_notes = st.text_area("📝 ملاحظات", value=str(row.get("ملاحظات", "")), key="edit_issue_notes")
+                
+                st.markdown("---")
+                
+                col_save, col_cancel = st.columns(2)
+                with col_save:
+                    if st.button("💾 حفظ التعديلات", use_container_width=True, type="primary"):
+                        full_df = load_issues()
+                        mask = full_df["رقم الصرف"].astype(str) == str(issue_no)
+                        idx = full_df[mask].index[0]
+                        full_df.loc[idx, "التاريخ"] = str(new_date)
+                        full_df.loc[idx, "الكمية المصروفة (كجم)"] = new_qty
+                        full_df.loc[idx, "الجهة/الطلب"] = new_to.strip()
+                        full_df.loc[idx, "ملاحظات"] = new_notes.strip()
+                        full_df.to_excel(ISSUES_FILE, index=False)
+                        st.session_state["edit_issue"] = None
+                        st.success("✅ تم التعديل")
+                        st.rerun()
+                
+                with col_cancel:
+                    if st.button("❌ إلغاء", use_container_width=True):
+                        st.session_state["edit_issue"] = None
+                        st.rerun()
+            
+            edit_issue_dialog()
     
+    # ==================== نافذة حذف الصرف ====================
+    if st.session_state.get("delete_issue"):
+        issue_no = st.session_state["delete_issue"]
+        
+        @st.dialog("🗑️ تأكيد حذف سند الصرف")
+        def delete_issue_dialog():
+            st.warning(f"⚠️ **هل أنت متأكد من حذف السند:** `{issue_no}` ؟")
+            st.markdown("**ملاحظة:** حذف السند هيرجع الكمية للمخزون.")
+            
+            col_yes, col_no = st.columns(2)
+            with col_yes:
+                if st.button("✅ نعم، احذف", type="primary", use_container_width=True):
+                    full_df = load_issues()
+                    full_df = full_df[full_df["رقم الصرف"].astype(str) != str(issue_no)]
+                    full_df.to_excel(ISSUES_FILE, index=False)
+                    st.session_state["delete_issue"] = None
+                    st.success(f"✅ تم حذف السند {issue_no}")
+                    st.rerun()
+            
+            with col_no:
+                if st.button("❌ إلغاء", use_container_width=True):
+                    st.session_state["delete_issue"] = None
+                    st.rerun()
+        
+        delete_issue_dialog()
+
     # ==================== تبويب 4: التقارير ====================
     with tab4:
         st.subheader("📊 تقارير المواد الخام")
@@ -635,9 +772,6 @@ def render_materials_section():
         if batches.empty:
             st.info("📭 مفيش بيانات للتقارير")
         else:
-            batches_with_rem = get_batches_with_remaining(batches)
-            
-            # ==================== تقرير 1: الرصيد لكل صنف ====================
             st.markdown("### 📦 الرصيد الحالي لكل صنف")
             total_stock = get_total_stock_by_material()
             if not total_stock.empty:
@@ -645,7 +779,6 @@ def render_materials_section():
             
             st.markdown("---")
             
-            # ==================== تقرير 2: الرصيد لكل مخزن ====================
             st.markdown("### 🏭 الرصيد الحالي لكل مخزن")
             stock_wh = get_stock_by_warehouse()
             if not stock_wh.empty:
@@ -653,7 +786,6 @@ def render_materials_section():
             
             st.markdown("---")
             
-            # ==================== تقرير 3: الدفعات اللي قربت تنتهي ====================
             st.markdown("### ⚠️ الدفعات اللي قربت تنتهي أو منتهية")
             expiring = get_expiring_batches()
             if expiring.empty:
@@ -663,14 +795,12 @@ def render_materials_section():
             
             st.markdown("---")
             
-            # ==================== تقرير 4: حركة الصرف ====================
             st.markdown("### 📤 حركة الصرف")
             issues = load_issues()
             
             if issues.empty:
                 st.info("📭 مفيش عمليات صرف مسجلة")
             else:
-                # فلاتر
                 col1, col2 = st.columns(2)
                 with col1:
                     filter_issue_mat = st.selectbox("🏷️ الصنف", ["الكل"] + materials_list, key="issue_filter_mat")
@@ -683,7 +813,6 @@ def render_materials_section():
                 if filter_issue_wh != "الكل":
                     filtered_issues = filtered_issues[filtered_issues["المخزن"] == filter_issue_wh]
                 
-                # إجمالي المصروف
                 filtered_issues["الكمية المصروفة (كجم)"] = pd.to_numeric(filtered_issues["الكمية المصروفة (كجم)"], errors="coerce")
                 total_issued = filtered_issues["الكمية المصروفة (كجم)"].sum()
                 
@@ -692,7 +821,6 @@ def render_materials_section():
             
             st.markdown("---")
             
-            # ==================== تقرير 5: الصرف لكل صنف ====================
             st.markdown("### 📊 إجمالي المصروف لكل صنف")
             issues = load_issues()
             if not issues.empty:
@@ -756,7 +884,6 @@ def render_materials_section():
                 else:
                     st.error("⚠️ اكتب اسم الصنف")
         
-        # عرض الأصناف
         materials_current = load_materials()
         st.markdown(f"**عدد الأصناف: {len(materials_current)}**")
         
@@ -792,7 +919,6 @@ def render_materials_section():
                 else:
                     st.error("⚠️ اكتب اسم المخزن")
         
-        # عرض المخازن
         warehouses_current = load_warehouses()
         st.markdown(f"**عدد المخازن: {len(warehouses_current)}**")
         
@@ -822,3 +948,12 @@ def render_materials_section():
             st.metric("📤 إجمالي عمليات الصرف", len(issues))
         with col3:
             st.metric("📅 تاريخ اليوم", date.today().strftime("%Y-%m-%d"))
+
+# ==================== النوافذ المنبثقة (خارج التبويبات) ====================
+# نافذة تعديل الدفعة
+if st.session_state.get("edit_batch"):
+    edit_batch_dialog(st.session_state["edit_batch"])
+
+# نافذة حذف الدفعة
+if st.session_state.get("delete_batch"):
+    delete_batch_dialog(st.session_state["delete_batch"])
