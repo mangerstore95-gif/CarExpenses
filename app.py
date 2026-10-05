@@ -5,6 +5,7 @@ import os
 import io
 
 from dashboard import render_dashboard
+from materials_section import render_materials_section
 
 st.set_page_config(page_title="إدارة مخازن مصنع القطامى", page_icon="🏭", layout="wide")
 
@@ -221,11 +222,24 @@ with st.sidebar:
     st.markdown("### مصنع القطامى للمواد العزلة")
     st.markdown("---")
     st.markdown("### 📋 الأقسام")
-    st.markdown("🚗 **مصاريف صيانة السيارات**")
+    
+    section = st.radio(
+        "اختر القسم",
+        ["🚗 صيانة السيارات", "📦 صلاحية المواد الخام"],
+        label_visibility="collapsed",
+        key="main_section_selector"
+    )
+    
     st.markdown("---")
     st.markdown("### ℹ️ عن البرنامج")
     st.markdown("**الإصدار:** 1.0")
 
+# ==================== عرض القسم المختار ====================
+if section == "📦 صلاحية المواد الخام":
+    render_materials_section()
+    st.stop()
+
+# ==================== قسم صيانة السيارات ====================
 st.title("🏭 إدارة مخازن مصنع القطامى للمواد العزلة")
 st.markdown("### 🚗 قسم مصاريف صيانة السيارات")
 st.markdown("---")
@@ -309,7 +323,7 @@ with tab1:
                 save_expense(new_row)
                 st.success(f"✅ تم حفظ الفاتورة {invoice_no} بنجاح!")
                 st.balloons()
-                
+
 # ==================== تبويب 2: عرض الفواتير ====================
 with tab2:
     st.subheader("📋 كل الفواتير المسجلة")
