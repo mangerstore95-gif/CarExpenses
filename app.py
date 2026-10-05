@@ -372,18 +372,7 @@ with tab2:
         if filtered_display.empty:
             st.warning("⚠️ مفيش فواتير مطابقة للفلاتر")
         else:
-            st.markdown(f"### 📋 الفواتير ({len(filtered_display)})")
-            st.caption("💡 الجدول فيه رأس ثابت — انزل بالماوس جوه الجدول، الرأس هيفضل ظاهر")
-            
-            # الجدول السريع مع رأس ثابت
-            st.dataframe(
-                filtered_display,
-                use_container_width=True,
-                hide_index=True,
-                height=500
-            )
-            
-            st.markdown("---")
+            # ==================== قسم التعديل والحذف (فوق الجدول) ====================
             st.markdown("### ✏️ تعديل أو حذف فاتورة")
             st.caption("💡 اختار الفاتورة من القائمة، وبعدها اضغط تعديل أو حذف")
             
@@ -412,6 +401,19 @@ with tab2:
                         inv_no = selected_invoice.split(" | ")[0].strip()
                         st.session_state["delete_invoice"] = inv_no
                         st.rerun()
+            
+            st.markdown("---")
+            
+            # ==================== الجدول ====================
+            st.markdown(f"### 📋 الفواتير ({len(filtered_display)})")
+            st.caption("💡 الجدول فيه رأس ثابت — انزل بالماوس جوه الجدول، الرأس هيفضل ظاهر")
+            
+            st.dataframe(
+                filtered_display,
+                use_container_width=True,
+                hide_index=True,
+                height=500
+            )
 
 # ==================== النوافذ المنبثقة ====================
 if st.session_state.get("edit_invoice"):
@@ -630,8 +632,4 @@ with tab4:
         with col3:
             st.markdown(f"🚛 {row['النوع']}")
         with col4:
-            if st.button("🗑️", key=f"del_veh_{i}"):
-                vehicles_df_curr = vehicles_df_curr.drop(i).reset_index(drop=True)
-                save_vehicles(vehicles_df_curr)
-                st.success(f"تم حذف: {row['الرقم']}")
-                st.rerun()
+            if st.button("🗑️", key=f"del_ve
