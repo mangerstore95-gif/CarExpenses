@@ -15,41 +15,6 @@ st.markdown("""
     .stTextInput input, .stNumberInput input { text-align: right; }
     [data-testid="stSidebar"] { direction: rtl; text-align: right; }
     @media print { .stApp { background: white !important; } }
-    
-    /* الرأس الثابت للجدول */
-    .sticky-header {
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 9999 !important;
-        background: linear-gradient(135deg, #1a1a2e, #16213e) !important;
-        padding: 12px 0 !important;
-        border-bottom: 3px solid #00e5ff !important;
-        box-shadow: 0 4px 12px rgba(0,229,255,0.3) !important;
-        margin-bottom: 0 !important;
-    }
-    
-    /* صندوق الفواتير القابل للتمرير */
-    .invoices-scroll-box {
-        max-height: 600px;
-        overflow-y: auto;
-        padding: 0 10px;
-        border: 1px solid rgba(0,229,255,0.2);
-        border-radius: 10px;
-        background: rgba(10,10,25,0.3);
-    }
-    
-    /* شريط التمرير */
-    .invoices-scroll-box::-webkit-scrollbar {
-        width: 10px;
-    }
-    .invoices-scroll-box::-webkit-scrollbar-track {
-        background: rgba(0,0,0,0.2);
-        border-radius: 5px;
-    }
-    .invoices-scroll-box::-webkit-scrollbar-thumb {
-        background: #00e5ff;
-        border-radius: 5px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -350,6 +315,7 @@ with tab2:
         st.info("📭 مفيش فواتير مسجلة لحد الآن")
     else:
         df["التاريخ_dt"] = pd.to_datetime(df["التاريخ"], errors="coerce")
+        
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             min_date = df["التاريخ_dt"].min().date() if not df["التاريخ_dt"].isna().all() else date.today()
@@ -406,63 +372,46 @@ with tab2:
         if filtered_display.empty:
             st.warning("⚠️ مفيش فواتير مطابقة للفلاتر")
         else:
-            # ==================== الرأس الثابت ====================
-            st.markdown('<div class="sticky-header">', unsafe_allow_html=True)
-            header_cols = st.columns([1.2, 1.1, 1.1, 1.1, 1, 2, 1.1, 1, 0.5, 0.5])
-            with header_cols[0]:
-                st.markdown("**🔢 الفاتورة**")
-            with header_cols[1]:
-                st.markdown("**🚙 السيارة**")
-            with header_cols[2]:
-                st.markdown("**👤 السائق**")
-            with header_cols[3]:
-                st.markdown("**📅 التاريخ**")
-            with header_cols[4]:
-                st.markdown("**💰 المبلغ**")
-            with header_cols[5]:
-                st.markdown("**🔧 المشكلة**")
-            with header_cols[6]:
-                st.markdown("**🚛 النوع**")
-            with header_cols[7]:
-                st.markdown("**📅 الصنع**")
-            with header_cols[8]:
-                st.markdown("**✏️**")
-            with header_cols[9]:
-                st.markdown("**🗑️**")
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown(f"### 📋 الفواتير ({len(filtered_display)})")
+            st.caption("💡 الجدول فيه رأس ثابت — انزل بالماوس جوه الجدول، الرأس هيفضل ظاهر")
             
-            # ==================== صندوق الفواتير القابل للتمرير ====================
-            st.markdown('<div class="invoices-scroll-box">', unsafe_allow_html=True)
+            # الجدول السريع مع رأس ثابت
+            st.dataframe(
+                filtered_display,
+                use_container_width=True,
+                hide_index=True,
+                height=500
+            )
             
+            st.markdown("---")
+            st.markdown("### ✏️ تعديل أو حذف فاتورة")
+            st.caption("💡 اختار الفاتورة من القائمة، وبعدها اضغط تعديل أو حذف")
+            
+            invoice_options = []
             for idx, row in filtered_display.iterrows():
-                cols = st.columns([1.2, 1.1, 1.1, 1.1, 1, 2, 1.1, 1, 0.5, 0.5])
-                with cols[0]:
-                    st.markdown(f"**{row['رقم الفاتورة']}**")
-                with cols[1]:
-                    st.markdown(f"{row['رقم السيارة']}")
-                with cols[2]:
-                    st.markdown(f"{row['اسم السائق']}")
-                with cols[3]:
-                    st.markdown(f"{row['التاريخ']}")
-                with cols[4]:
-                    st.markdown(f"**{row['المبلغ (د.ك)']}**")
-                with cols[5]:
-                    st.markdown(f"{row['المشكلة']}")
-                with cols[6]:
-                    st.markdown(f"{row['نوع المركبة']}")
-                with cols[7]:
-                    st.markdown(f"{row['سنة الصنع']}")
-                with cols[8]:
-                    if st.button("✏️", key=f"edit_btn_{idx}", help="تعديل"):
-                        st.session_state["edit_invoice"] = str(row['رقم الفاتورة'])
-                        st.rerun()
-                with cols[9]:
-                    if st.button("🗑️", key=f"delete_btn_{idx}", help="حذف"):
-                        st.session_state["delete_invoice"] = str(row['رقم الفاتورة'])
-                        st.rerun()
-                st.markdown("<hr style='margin:2px 0; opacity:0.2;'>", unsafe_allow_html=True)
+                invoice_options.append(f"{row['رقم الفاتورة']} | {row['رقم السيارة']} | {row['اسم السائق']} | {row['المبلغ (د.ك)']} د.ك | {row['التاريخ']}")
             
-            st.markdown('</div>', unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([3, 1, 1])
+            with col1:
+                selected_invoice = st.selectbox(
+                    "🔍 اختار الفاتورة",
+                    ["-- اختر --"] + invoice_options,
+                    key="manage_invoice_select"
+                )
+            with col2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("✏️ تعديل", use_container_width=True, type="primary"):
+                    if selected_invoice != "-- اختر --":
+                        inv_no = selected_invoice.split(" | ")[0].strip()
+                        st.session_state["edit_invoice"] = inv_no
+                        st.rerun()
+            with col3:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("🗑️ حذف", use_container_width=True):
+                    if selected_invoice != "-- اختر --":
+                        inv_no = selected_invoice.split(" | ")[0].strip()
+                        st.session_state["delete_invoice"] = inv_no
+                        st.rerun()
 
 # ==================== النوافذ المنبثقة ====================
 if st.session_state.get("edit_invoice"):
@@ -541,7 +490,7 @@ with tab3:
             st.markdown(f"### 📋 الفواتير ({len(filtered)})")
             display_df = filtered.copy()
             display_df["التاريخ"] = display_df["التاريخ"].dt.strftime("%Y-%m-%d")
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
             
             st.markdown("---")
             st.markdown("### 📊 التحليل البياني")
