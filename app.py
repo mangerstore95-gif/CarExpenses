@@ -309,6 +309,7 @@ with tab1:
                 save_expense(new_row)
                 st.success(f"✅ تم حفظ الفاتورة {invoice_no} بنجاح!")
                 st.balloons()
+                
 # ==================== تبويب 2: عرض الفواتير ====================
 with tab2:
     st.subheader("📋 كل الفواتير المسجلة")
@@ -318,7 +319,6 @@ with tab2:
     else:
         df["التاريخ_dt"] = pd.to_datetime(df["التاريخ"], errors="coerce")
         
-        # ==================== الفلاتر ====================
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             min_date = df["التاريخ_dt"].min().date() if not df["التاريخ_dt"].isna().all() else date.today()
@@ -348,7 +348,6 @@ with tab2:
         filtered_display = filtered.drop(columns=["التاريخ_dt"], errors="ignore").reset_index(drop=True)
         total_amount = pd.to_numeric(filtered_display["المبلغ (د.ك)"], errors="coerce").sum()
         
-        # ==================== الملخص ====================
         st.markdown(f"""
         ### 📊 ملخص النتائج
         🔢 **عدد الفواتير:** {len(filtered_display)} &nbsp;&nbsp;|&nbsp;&nbsp; 
@@ -373,18 +372,19 @@ with tab2:
         
         st.markdown("---")
         
-        # ==================== الجدول التفاعلي ====================
         if filtered_display.empty:
             st.warning("⚠️ مفيش فواتير مطابقة للفلاتر")
         else:
             st.markdown(f"### 📋 الفواتير ({len(filtered_display)})")
             st.caption("💡 علّم على ☑ في عمود 'اختر' لتعديل أو حذف الفاتورة. وتقدر تعدّل أي خلية مباشرة.")
             
-            # نضيف عمود "اختر"
             df_editor = filtered_display.copy()
+            for col in df_editor.columns:
+                if col != "المبلغ (د.ك)":
+                    df_editor[col] = df_editor[col].astype(str)
+            df_editor["المبلغ (د.ك)"] = pd.to_numeric(df_editor["المبلغ (د.ك)"], errors="coerce")
             df_editor.insert(0, "اختر", False)
             
-            # الجدول التفاعلي
             edited_df = st.data_editor(
                 df_editor,
                 use_container_width=True,
@@ -409,7 +409,6 @@ with tab2:
                 }
             )
             
-            # ==================== الأزرار ====================
             st.markdown("---")
             st.markdown("### 🔧 إجراءات على الفواتير المحددة")
             
@@ -441,10 +440,7 @@ with tab2:
             
             with col_btn3:
                 if st.button("💾 حفظ التعديلات", use_container_width=True):
-                    original = filtered_display.copy()
                     edited = edited_df.drop(columns=["اختر"]).copy()
-                    
-                    # نقارن القيم
                     changed_count = 0
                     full_df = load_expenses()
                     
@@ -479,7 +475,7 @@ with tab2:
                         st.info("ℹ️ مفيش تعديلات جديدة")
             
             with col_btn4:
-                st.markdown("💡 **ملاحظة:** لتعديل عدة فواتير في نفس الوقت، عدّل الخلايا مباشرة ثم اضغط 'حفظ التعديلات'")
+                st.markdown("💡 **ملاحظة:** لتعديل عدة فواتير، عدّل الخلايا مباشرة ثم اضغط 'حفظ التعديلات'")
 
 # ==================== النوافذ المنبثقة ====================
 if st.session_state.get("edit_invoice"):
