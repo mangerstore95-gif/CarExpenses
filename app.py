@@ -96,6 +96,9 @@ def save_expense(new_row):
     df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
     df.to_excel(EXPENSES_FILE, index=False)
 
+def save_all_expenses(df):
+    df.to_excel(EXPENSES_FILE, index=False)
+
 def invoice_exists(invoice_no):
     df = load_expenses()
     if df.empty:
@@ -306,7 +309,6 @@ with tab1:
                 save_expense(new_row)
                 st.success(f"✅ تم حفظ الفاتورة {invoice_no} بنجاح!")
                 st.balloons()
-
 # ==================== تبويب 2: عرض الفواتير ====================
 with tab2:
     st.subheader("📋 كل الفواتير المسجلة")
@@ -316,6 +318,7 @@ with tab2:
     else:
         df["التاريخ_dt"] = pd.to_datetime(df["التاريخ"], errors="coerce")
         
+        # ==================== الفلاتر ====================
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             min_date = df["التاريخ_dt"].min().date() if not df["التاريخ_dt"].isna().all() else date.today()
@@ -342,9 +345,10 @@ with tab2:
         if filter_type != "الكل":
             filtered = filtered[filtered["نوع المركبة"] == filter_type]
         
-        filtered_display = filtered.drop(columns=["التاريخ_dt"], errors="ignore")
+        filtered_display = filtered.drop(columns=["التاريخ_dt"], errors="ignore").reset_index(drop=True)
         total_amount = pd.to_numeric(filtered_display["المبلغ (د.ك)"], errors="coerce").sum()
         
+        # ==================== الملخص ====================
         st.markdown(f"""
         ### 📊 ملخص النتائج
         🔢 **عدد الفواتير:** {len(filtered_display)} &nbsp;&nbsp;|&nbsp;&nbsp; 
@@ -369,51 +373,113 @@ with tab2:
         
         st.markdown("---")
         
+        # ==================== الجدول التفاعلي ====================
         if filtered_display.empty:
             st.warning("⚠️ مفيش فواتير مطابقة للفلاتر")
         else:
-            # ==================== قسم التعديل والحذف (فوق الجدول) ====================
-            st.markdown("### ✏️ تعديل أو حذف فاتورة")
-            st.caption("💡 اختار الفاتورة من القائمة، وبعدها اضغط تعديل أو حذف")
+            st.markdown(f"### 📋 الفواتير ({len(filtered_display)})")
+            st.caption("💡 علّم على ☑ في عمود 'اختر' لتعديل أو حذف الفاتورة. وتقدر تعدّل أي خلية مباشرة.")
             
-            invoice_options = []
-            for idx, row in filtered_display.iterrows():
-                invoice_options.append(f"{row['رقم الفاتورة']} | {row['رقم السيارة']} | {row['اسم السائق']} | {row['المبلغ (د.ك)']} د.ك | {row['التاريخ']}")
+            # نضيف عمود "اختر"
+            df_editor = filtered_display.copy()
+            df_editor.insert(0, "اختر", False)
             
-            col1, col2, col3 = st.columns([3, 1, 1])
-            with col1:
-                selected_invoice = st.selectbox(
-                    "🔍 اختار الفاتورة",
-                    ["-- اختر --"] + invoice_options,
-                    key="manage_invoice_select"
-                )
-            with col2:
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("✏️ تعديل", use_container_width=True, type="primary"):
-                    if selected_invoice != "-- اختر --":
-                        inv_no = selected_invoice.split(" | ")[0].strip()
+            # الجدول التفاعلي
+            edited_df = st.data_editor(
+                df_editor,
+                use_container_width=True,
+                hide_index=True,
+                height=500,
+                key="invoices_editor",
+                column_config={
+                    "اختر": st.column_config.CheckboxColumn(
+                        "اختر",
+                        help="علّم لتعديل أو حذف الفاتورة",
+                        default=False,
+                        width="small"
+                    ),
+                    "رقم الفاتورة": st.column_config.TextColumn("🔢 رقم الفاتورة", width="small"),
+                    "رقم السيارة": st.column_config.TextColumn("🚙 رقم السيارة", width="small"),
+                    "اسم السائق": st.column_config.TextColumn("👤 السائق", width="small"),
+                    "التاريخ": st.column_config.TextColumn("📅 التاريخ", width="small"),
+                    "المبلغ (د.ك)": st.column_config.NumberColumn("💰 المبلغ (د.ك)", format="%.3f", width="small"),
+                    "المشكلة": st.column_config.TextColumn("🔧 المشكلة", width="medium"),
+                    "نوع المركبة": st.column_config.TextColumn("🚛 النوع", width="small"),
+                    "سنة الصنع": st.column_config.TextColumn("📅 الصنع", width="small"),
+                }
+            )
+            
+            # ==================== الأزرار ====================
+            st.markdown("---")
+            st.markdown("### 🔧 إجراءات على الفواتير المحددة")
+            
+            col_btn1, col_btn2, col_btn3, col_btn4 = st.columns([1, 1, 1, 3])
+            
+            with col_btn1:
+                if st.button("✏️ تعديل المحدد", use_container_width=True, type="primary"):
+                    selected = edited_df[edited_df["اختر"] == True]
+                    if len(selected) == 0:
+                        st.warning("⚠️ علّم على فاتورة أولًا")
+                    elif len(selected) > 1:
+                        st.error("⚠️ اختار فاتورة واحدة بس")
+                    else:
+                        inv_no = str(selected.iloc[0]["رقم الفاتورة"])
                         st.session_state["edit_invoice"] = inv_no
                         st.rerun()
-            with col3:
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("🗑️ حذف", use_container_width=True):
-                    if selected_invoice != "-- اختر --":
-                        inv_no = selected_invoice.split(" | ")[0].strip()
+            
+            with col_btn2:
+                if st.button("🗑️ حذف المحدد", use_container_width=True):
+                    selected = edited_df[edited_df["اختر"] == True]
+                    if len(selected) == 0:
+                        st.warning("⚠️ علّم على فاتورة أولًا")
+                    elif len(selected) > 1:
+                        st.error("⚠️ اختار فاتورة واحدة بس")
+                    else:
+                        inv_no = str(selected.iloc[0]["رقم الفاتورة"])
                         st.session_state["delete_invoice"] = inv_no
                         st.rerun()
             
-            st.markdown("---")
+            with col_btn3:
+                if st.button("💾 حفظ التعديلات", use_container_width=True):
+                    original = filtered_display.copy()
+                    edited = edited_df.drop(columns=["اختر"]).copy()
+                    
+                    # نقارن القيم
+                    changed_count = 0
+                    full_df = load_expenses()
+                    
+                    for i in range(len(edited)):
+                        inv_no = str(edited.iloc[i]["رقم الفاتورة"])
+                        mask = full_df["رقم الفاتورة"].astype(str) == inv_no
+                        if not mask.any():
+                            continue
+                        idx = full_df[mask].index[0]
+                        
+                        for col in edited.columns:
+                            new_val = edited.iloc[i][col]
+                            old_val = full_df.loc[idx, col]
+                            
+                            if col == "المبلغ (د.ك)":
+                                try:
+                                    if float(new_val) != float(old_val):
+                                        full_df.loc[idx, col] = float(new_val)
+                                        changed_count += 1
+                                except:
+                                    pass
+                            else:
+                                if str(new_val) != str(old_val):
+                                    full_df.loc[idx, col] = new_val
+                                    changed_count += 1
+                    
+                    if changed_count > 0:
+                        save_all_expenses(full_df)
+                        st.success(f"✅ تم حفظ {changed_count} تعديل!")
+                        st.rerun()
+                    else:
+                        st.info("ℹ️ مفيش تعديلات جديدة")
             
-            # ==================== الجدول ====================
-            st.markdown(f"### 📋 الفواتير ({len(filtered_display)})")
-            st.caption("💡 الجدول فيه رأس ثابت — انزل بالماوس جوه الجدول، الرأس هيفضل ظاهر")
-            
-            st.dataframe(
-                filtered_display,
-                use_container_width=True,
-                hide_index=True,
-                height=500
-            )
+            with col_btn4:
+                st.markdown("💡 **ملاحظة:** لتعديل عدة فواتير في نفس الوقت، عدّل الخلايا مباشرة ثم اضغط 'حفظ التعديلات'")
 
 # ==================== النوافذ المنبثقة ====================
 if st.session_state.get("edit_invoice"):
@@ -492,7 +558,7 @@ with tab3:
             st.markdown(f"### 📋 الفواتير ({len(filtered)})")
             display_df = filtered.copy()
             display_df["التاريخ"] = display_df["التاريخ"].dt.strftime("%Y-%m-%d")
-            st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
             
             st.markdown("---")
             st.markdown("### 📊 التحليل البياني")
@@ -632,4 +698,8 @@ with tab4:
         with col3:
             st.markdown(f"🚛 {row['النوع']}")
         with col4:
-            if st.button("🗑️", key=f"del_ve
+            if st.button("🗑️", key=f"del_veh_{i}"):
+                vehicles_df_curr = vehicles_df_curr.drop(i).reset_index(drop=True)
+                save_vehicles(vehicles_df_curr)
+                st.success(f"تم حذف: {row['الرقم']}")
+                st.rerun()
