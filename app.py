@@ -15,6 +15,41 @@ st.markdown("""
     .stTextInput input, .stNumberInput input { text-align: right; }
     [data-testid="stSidebar"] { direction: rtl; text-align: right; }
     @media print { .stApp { background: white !important; } }
+    
+    /* الرأس الثابت للجدول */
+    .sticky-header {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 9999 !important;
+        background: linear-gradient(135deg, #1a1a2e, #16213e) !important;
+        padding: 12px 0 !important;
+        border-bottom: 3px solid #00e5ff !important;
+        box-shadow: 0 4px 12px rgba(0,229,255,0.3) !important;
+        margin-bottom: 0 !important;
+    }
+    
+    /* صندوق الفواتير القابل للتمرير */
+    .invoices-scroll-box {
+        max-height: 600px;
+        overflow-y: auto;
+        padding: 0 10px;
+        border: 1px solid rgba(0,229,255,0.2);
+        border-radius: 10px;
+        background: rgba(10,10,25,0.3);
+    }
+    
+    /* شريط التمرير */
+    .invoices-scroll-box::-webkit-scrollbar {
+        width: 10px;
+    }
+    .invoices-scroll-box::-webkit-scrollbar-track {
+        background: rgba(0,0,0,0.2);
+        border-radius: 5px;
+    }
+    .invoices-scroll-box::-webkit-scrollbar-thumb {
+        background: #00e5ff;
+        border-radius: 5px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -371,6 +406,8 @@ with tab2:
         if filtered_display.empty:
             st.warning("⚠️ مفيش فواتير مطابقة للفلاتر")
         else:
+            # ==================== الرأس الثابت ====================
+            st.markdown('<div class="sticky-header">', unsafe_allow_html=True)
             header_cols = st.columns([1.2, 1.1, 1.1, 1.1, 1, 2, 1.1, 1, 0.5, 0.5])
             with header_cols[0]:
                 st.markdown("**🔢 الفاتورة**")
@@ -392,8 +429,10 @@ with tab2:
                 st.markdown("**✏️**")
             with header_cols[9]:
                 st.markdown("**🗑️**")
+            st.markdown('</div>', unsafe_allow_html=True)
             
-            st.markdown("<hr style='margin:5px 0;'>", unsafe_allow_html=True)
+            # ==================== صندوق الفواتير القابل للتمرير ====================
+            st.markdown('<div class="invoices-scroll-box">', unsafe_allow_html=True)
             
             for idx, row in filtered_display.iterrows():
                 cols = st.columns([1.2, 1.1, 1.1, 1.1, 1, 2, 1.1, 1, 0.5, 0.5])
@@ -422,6 +461,8 @@ with tab2:
                         st.session_state["delete_invoice"] = str(row['رقم الفاتورة'])
                         st.rerun()
                 st.markdown("<hr style='margin:2px 0; opacity:0.2;'>", unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # ==================== النوافذ المنبثقة ====================
 if st.session_state.get("edit_invoice"):
