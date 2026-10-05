@@ -130,75 +130,92 @@ def render_dashboard(df, vehicles_df, drivers_list):
     
     st.markdown("---")
     
-    col1, col2 = st.columns(2)
+    # ==================== أعلى 5 سيارات (أعمدة رأسية) ====================
+    st.markdown("### 🚙 أعلى 5 سيارات (مصاريف)")
     
-    with col1:
-        st.markdown("### 🚙 أعلى 5 سيارات (مصاريف)")
-        top_cars = filtered.groupby("رقم السيارة")["المبلغ (د.ك)"].sum().sort_values(ascending=False).head(5).reset_index()
-        
-        if not top_cars.empty:
-            top_cars["رقم السيارة"] = top_cars["رقم السيارة"].astype(str)
-            top_cars = top_cars.sort_values("المبلغ (د.ك)", ascending=True)
-            
-            fig_cars = go.Figure(go.Bar(
-                x=top_cars["المبلغ (د.ك)"],
-                y=top_cars["رقم السيارة"],
-                orientation='h',
-                marker=dict(color=top_cars["المبلغ (د.ك)"], colorscale=[[0, '#ff1744'], [0.5, '#ff4ecd'], [1, '#00e5ff']], showscale=False, line=dict(color='rgba(0,229,255,0.5)', width=2)),
-                text=top_cars["المبلغ (د.ك)"].apply(lambda x: f"  {x:,.0f}  "),
-                textposition='inside',
-                insidetextanchor='end',
-                textfont=dict(size=15, color='white'),
-                hovertemplate='<b>سيارة %{y}</b><br>المبلغ: %{x:,.3f} د.ك<extra></extra>'
-            ))
-            fig_cars.update_layout(
-                height=400,
-                xaxis_title="المبلغ (د.ك)",
-                yaxis_title="",
-                plot_bgcolor='rgba(10,10,25,0.6)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='white', size=13),
-                margin=dict(l=20, r=40, t=20, b=40),
-                xaxis=dict(gridcolor='rgba(0,229,255,0.1)', linecolor='rgba(0,229,255,0.3)'),
-                yaxis=dict(gridcolor='rgba(0,229,255,0.05)'),
-                bargap=0.3
-            )
-            st.plotly_chart(fig_cars, use_container_width=True)
+    top_cars = filtered.groupby("رقم السيارة")["المبلغ (د.ك)"].sum().sort_values(ascending=False).head(5).reset_index()
     
-    with col2:
-        st.markdown("### 👤 أعلى 5 سائقين (مصاريف)")
-        top_drivers = filtered.groupby("اسم السائق")["المبلغ (د.ك)"].sum().sort_values(ascending=False).head(5).reset_index()
+    if not top_cars.empty:
+        top_cars["رقم السيارة"] = top_cars["رقم السيارة"].astype(str)
+        max_val = top_cars["المبلغ (د.ك)"].max()
         
-        if not top_drivers.empty:
-            top_drivers = top_drivers.sort_values("المبلغ (د.ك)", ascending=True)
-            
-            fig_drivers = go.Figure(go.Bar(
-                x=top_drivers["المبلغ (د.ك)"],
-                y=top_drivers["اسم السائق"],
-                orientation='h',
-                marker=dict(color=top_drivers["المبلغ (د.ك)"], colorscale=[[0, '#39ff14'], [0.5, '#ffb400'], [1, '#ff1744']], showscale=False, line=dict(color='rgba(57,255,20,0.5)', width=2)),
-                text=top_drivers["المبلغ (د.ك)"].apply(lambda x: f"  {x:,.0f}  "),
-                textposition='inside',
-                insidetextanchor='end',
-                textfont=dict(size=15, color='white'),
-                hovertemplate='<b>%{y}</b><br>المبلغ: %{x:,.3f} د.ك<extra></extra>'
-            ))
-            fig_drivers.update_layout(
-                height=400,
-                xaxis_title="المبلغ (د.ك)",
-                yaxis_title="",
-                plot_bgcolor='rgba(10,10,25,0.6)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='white', size=13),
-                margin=dict(l=20, r=40, t=20, b=40),
-                xaxis=dict(gridcolor='rgba(57,255,20,0.1)', linecolor='rgba(57,255,20,0.3)'),
-                yaxis=dict(gridcolor='rgba(57,255,20,0.05)'),
-                bargap=0.3
-            )
-            st.plotly_chart(fig_drivers, use_container_width=True)
+        fig_cars = go.Figure(go.Bar(
+            x=top_cars["رقم السيارة"],
+            y=top_cars["المبلغ (د.ك)"],
+            marker=dict(
+                color=top_cars["المبلغ (د.ك)"],
+                colorscale=[[0, '#ff1744'], [0.5, '#ff4ecd'], [1, '#00e5ff']],
+                showscale=False,
+                line=dict(color='rgba(0,229,255,0.5)', width=2)
+            ),
+            text=top_cars["المبلغ (د.ك)"].apply(lambda x: f"{x:,.0f}"),
+            textposition='outside',
+            textfont=dict(size=16, color='white'),
+            hovertemplate='<b>سيارة %{x}</b><br>المبلغ: %{y:,.3f} د.ك<extra></extra>'
+        ))
+        fig_cars.update_layout(
+            height=420,
+            xaxis_title="رقم السيارة",
+            yaxis_title="المبلغ (د.ك)",
+            plot_bgcolor='rgba(10,10,25,0.6)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white', size=13),
+            margin=dict(l=40, r=40, t=40, b=40),
+            xaxis=dict(gridcolor='rgba(0,229,255,0.1)', linecolor='rgba(0,229,255,0.3)'),
+            yaxis=dict(
+                gridcolor='rgba(0,229,255,0.1)',
+                linecolor='rgba(0,229,255,0.3)',
+                range=[0, max_val * 1.15]
+            ),
+            bargap=0.35
+        )
+        st.plotly_chart(fig_cars, use_container_width=True)
     
     st.markdown("---")
     
+    # ==================== أعلى 5 سائقين (أعمدة رأسية) ====================
+    st.markdown("### 👤 أعلى 5 سائقين (مصاريف)")
+    
+    top_drivers = filtered.groupby("اسم السائق")["المبلغ (د.ك)"].sum().sort_values(ascending=False).head(5).reset_index()
+    
+    if not top_drivers.empty:
+        max_val_d = top_drivers["المبلغ (د.ك)"].max()
+        
+        fig_drivers = go.Figure(go.Bar(
+            x=top_drivers["اسم السائق"],
+            y=top_drivers["المبلغ (د.ك)"],
+            marker=dict(
+                color=top_drivers["المبلغ (د.ك)"],
+                colorscale=[[0, '#39ff14'], [0.5, '#ffb400'], [1, '#ff1744']],
+                showscale=False,
+                line=dict(color='rgba(57,255,20,0.5)', width=2)
+            ),
+            text=top_drivers["المبلغ (د.ك)"].apply(lambda x: f"{x:,.0f}"),
+            textposition='outside',
+            textfont=dict(size=16, color='white'),
+            hovertemplate='<b>%{x}</b><br>المبلغ: %{y:,.3f} د.ك<extra></extra>'
+        ))
+        fig_drivers.update_layout(
+            height=420,
+            xaxis_title="السائق",
+            yaxis_title="المبلغ (د.ك)",
+            plot_bgcolor='rgba(10,10,25,0.6)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white', size=13),
+            margin=dict(l=40, r=40, t=40, b=40),
+            xaxis=dict(gridcolor='rgba(57,255,20,0.1)', linecolor='rgba(57,255,20,0.3)'),
+            yaxis=dict(
+                gridcolor='rgba(57,255,20,0.1)',
+                linecolor='rgba(57,255,20,0.3)',
+                range=[0, max_val_d * 1.15]
+            ),
+            bargap=0.35
+        )
+        st.plotly_chart(fig_drivers, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # ==================== توزيع حسب النوع ====================
     st.markdown("### 🚛 توزيع المصاريف حسب نوع المركبة")
     
     col1, col2 = st.columns([1, 1])
