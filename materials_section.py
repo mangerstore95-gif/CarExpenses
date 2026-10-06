@@ -160,6 +160,7 @@ def edit_batch_dialog_local(batch_no):
         st.error("⚠️ الدفعة مش موجودة")
         if st.button("إغلاق"):
             st.session_state["edit_batch"] = None
+            st.query_params.clear()
             st.rerun()
         return
     
@@ -244,13 +245,15 @@ def edit_batch_dialog_local(batch_no):
                 full_df.loc[idx, "الكمية المتبقية (كجم)"] = new_total - issued_qty
                 full_df.loc[idx, "ملاحظات"] = new_notes.strip()
                 full_df.to_excel(BATCHES_FILE, index=False)
-                st.success(f"✅ تم تحديث الدفعة {batch_no}")
                 st.session_state["edit_batch"] = None
+                st.query_params.clear()
+                st.success(f"✅ تم تحديث الدفعة {batch_no}")
                 st.rerun()
     
     with col_cancel:
         if st.button("❌ إلغاء", use_container_width=True, key="cancel_edit_batch_btn"):
             st.session_state["edit_batch"] = None
+            st.query_params.clear()
             st.rerun()
 
 # ==================== نافذة تأكيد حذف الدفعة ====================
@@ -263,6 +266,7 @@ def delete_batch_dialog_local(batch_no):
         st.error("⚠️ الدفعة مش موجودة")
         if st.button("إغلاق"):
             st.session_state["delete_batch"] = None
+            st.query_params.clear()
             st.rerun()
         return
     
@@ -279,6 +283,7 @@ def delete_batch_dialog_local(batch_no):
             st.dataframe(related[["رقم الصرف", "التاريخ", "الكمية المصروفة (كجم)", "الجهة/الطلب"]], use_container_width=True, hide_index=True)
         if st.button("إغلاق", use_container_width=True):
             st.session_state["delete_batch"] = None
+            st.query_params.clear()
             st.rerun()
     else:
         st.warning(f"⚠️ **هل أنت متأكد من حذف الدفعة** `{batch_no}` **؟**")
@@ -293,12 +298,14 @@ def delete_batch_dialog_local(batch_no):
                 full_df = load_batches()
                 full_df = full_df[full_df["رقم الدفعة"].astype(str) != str(batch_no)]
                 full_df.to_excel(BATCHES_FILE, index=False)
-                st.success(f"✅ تم حذف الدفعة {batch_no}")
                 st.session_state["delete_batch"] = None
+                st.query_params.clear()
+                st.success(f"✅ تم حذف الدفعة {batch_no}")
                 st.rerun()
         with col_no:
             if st.button("❌ إلغاء", use_container_width=True, key="cancel_del_batch_btn"):
                 st.session_state["delete_batch"] = None
+                st.query_params.clear()
                 st.rerun()
                 
 # ==================== دالة القسم الرئيسية ====================
@@ -657,6 +664,7 @@ def render_materials_section():
                         else:
                             issue_no_sel = str(selected.iloc[0]["رقم الصرف"])
                             st.session_state["edit_issue"] = issue_no_sel
+                            st.query_params["edit_issue"] = issue_no_sel
                             st.rerun()
                 
                 with col_btn2:
@@ -669,6 +677,7 @@ def render_materials_section():
                         else:
                             issue_no_sel = str(selected.iloc[0]["رقم الصرف"])
                             st.session_state["delete_issue"] = issue_no_sel
+                            st.query_params["delete_issue"] = issue_no_sel
                             st.rerun()
                 
                 with col_btn3:
@@ -775,6 +784,7 @@ def render_materials_section():
                         else:
                             batch_no_sel = str(selected.iloc[0]["رقم الدفعة"])
                             st.session_state["edit_batch"] = batch_no_sel
+                            st.query_params["edit_batch"] = batch_no_sel
                             st.rerun()
                 
                 with col_btn2:
@@ -787,6 +797,7 @@ def render_materials_section():
                         else:
                             batch_no_sel = str(selected.iloc[0]["رقم الدفعة"])
                             st.session_state["delete_batch"] = batch_no_sel
+                            st.query_params["delete_batch"] = batch_no_sel
                             st.rerun()
                 
                 with col_btn3:
@@ -978,9 +989,17 @@ def render_materials_section():
         with col3:
             st.metric("📅 تاريخ اليوم", date.today().strftime("%Y-%m-%d"))
 
-# ==================== النوافذ المنبثقة (في نفس الملف - دي الحل) ====================
-if st.session_state.get("edit_batch"):
+# ==================== النوافذ المنبثقة ====================
+# نستخدم query_params بدل session_state — أضمن في Streamlit
+edit_batch_param = st.query_params.get("edit_batch")
+delete_batch_param = st.query_params.get("delete_batch")
+
+if edit_batch_param:
+    edit_batch_dialog_local(edit_batch_param)
+elif st.session_state.get("edit_batch"):
     edit_batch_dialog_local(st.session_state["edit_batch"])
 
-if st.session_state.get("delete_batch"):
+if delete_batch_param:
+    delete_batch_dialog_local(delete_batch_param)
+elif st.session_state.get("delete_batch"):
     delete_batch_dialog_local(st.session_state["delete_batch"])
