@@ -7,6 +7,7 @@ import io
 from dashboard import render_dashboard
 from materials_section import render_materials_section
 from performance_section import render_performance_section
+from diesel_section import render_diesel_section
 
 st.set_page_config(page_title="إدارة مخازن مصنع القطامى", page_icon="🏭", layout="wide")
 
@@ -226,7 +227,7 @@ with st.sidebar:
     
     section = st.radio(
         "اختر القسم",
-        ["🚗 صيانة السيارات", "📦 صلاحية المواد الخام", "📊 مؤشر الأداء القياسي"],
+        ["🚗 صيانة السيارات", "📦 صلاحية المواد الخام", "📊 مؤشر الأداء القياسي", "⛽ تعبئة الديزل"],
         label_visibility="collapsed",
         key="main_section_selector"
     )
@@ -244,6 +245,10 @@ if section == "📊 مؤشر الأداء القياسي":
     render_performance_section()
     st.stop()
 
+if section == "⛽ تعبئة الديزل":
+    render_diesel_section()
+    st.stop()
+
 # ==================== قسم صيانة السيارات ====================
 st.title("🏭 إدارة مخازن مصنع القطامى للمواد العزلة")
 st.markdown("### 🚗 قسم مصاريف صيانة السيارات")
@@ -257,12 +262,10 @@ tab0, tab1, tab2, tab3, tab4 = st.tabs([
     "⚙️ الإعدادات"
 ])
 
-# ==================== تبويب 0: لوحة المعلومات ====================
 with tab0:
     df_dash = load_expenses()
     render_dashboard(df_dash, vehicles_df, drivers_list)
 
-# ==================== تبويب 1: إضافة فاتورة ====================
 with tab1:
     st.subheader("➕ إضافة فاتورة جديدة")
     col1, col2 = st.columns(2)
@@ -329,7 +332,6 @@ with tab1:
                 st.success(f"✅ تم حفظ الفاتورة {invoice_no} بنجاح!")
                 st.balloons()
                 
-# ==================== تبويب 2: عرض الفواتير ====================
 with tab2:
     st.subheader("📋 كل الفواتير المسجلة")
     df = load_expenses()
@@ -455,13 +457,11 @@ with tab2:
             with col_btn3:
                 st.markdown("💡 **ملاحظة:** لتعديل أو حذف فاتورة، علّم على ☑ جنبها واضغط الزر المناسب")
 
-# ==================== النوافذ المنبثقة ====================
 if st.session_state.get("edit_invoice"):
     edit_invoice_dialog(st.session_state["edit_invoice"])
 if st.session_state.get("delete_invoice"):
     delete_invoice_dialog(st.session_state["delete_invoice"])
     
-# ==================== تبويب 3: التقارير ====================
 with tab3:
     st.subheader("📊 التقارير والتحليل المتقدم")
     df = load_expenses()
@@ -595,7 +595,6 @@ with tab3:
             car_stats = car_stats.sort_values("إجمالي المصاريف", ascending=False)
             st.dataframe(car_stats, use_container_width=True)
 
-# ==================== تبويب 4: الإعدادات ====================
 with tab4:
     st.subheader("⚙️ الإعدادات")
     st.markdown("---")
@@ -677,3 +676,4 @@ with tab4:
                 save_vehicles(vehicles_df_curr)
                 st.success(f"تم حذف: {row['الرقم']}")
                 st.rerun()
+                
