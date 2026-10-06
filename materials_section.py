@@ -34,6 +34,39 @@ DEFAULT_SETTINGS = {
     "مدة التحذير الأقصى (يوم)": 7,
 }
 
+# ==================== دوال مساعدة ====================
+def safe_date_parse(date_val, default=None):
+    """يرجع تاريخ صالح أو التاريخ الافتراضي"""
+    if default is None:
+        default = date.today()
+    try:
+        if pd.isna(date_val):
+            return default
+        result = pd.to_datetime(date_val, errors='coerce')
+        if pd.isna(result):
+            return default
+        return result.date()
+    except:
+        return default
+
+def safe_float_parse(val, default=0.0):
+    """يرجع رقم صالح"""
+    try:
+        if pd.isna(val):
+            return default
+        return float(val)
+    except:
+        return default
+
+def safe_int_parse(val, default=0):
+    """يرجع رقم صحيح"""
+    try:
+        if pd.isna(val):
+            return default
+        return int(float(val))
+    except:
+        return default
+
 # ==================== دوال تهيئة الملفات ====================
 def init_materials_files():
     if not os.path.exists(MATERIALS_FILE):
@@ -89,9 +122,12 @@ def save_materials_settings(settings):
 # ==================== دوال الحساب ====================
 def get_expiry_status(expiry_date, warning_days=30, critical_days=7):
     try:
-        exp = pd.to_datetime(expiry_date).date()
+        exp = pd.to_datetime(expiry_date, errors='coerce')
+        if pd.isna(exp):
+            return "غير محدد", None, "⚪"
+        exp_date = exp.date()
         today = date.today()
-        days_left = (exp - today).days
+        days_left = (exp_date - today).days
         if days_left < 0:
             return "منتهي", days_left, "🔴"
         elif days_left <= critical_days:
@@ -152,12 +188,15 @@ def get_expiring_batches():
 
 # ==================== فورم تعديل الدفعة (يظهر في الصفحة نفسها) ====================
 def render_edit_batch_form(batch_no):
+    # مفتاح فريد لكل دفعة
+    form_key = f"edit_form_{str(batch_no).replace(' ', '_')}"
+    
     batches = load_batches()
     match = batches[batches["رقم الدفعة"].astype(str) == str(batch_no)]
     
     if match.empty:
         st.error("⚠️ الدفعة مش موجودة")
-        if st.button("إغلاق", key="close_edit_empty"):
+        if st.button("إغلاق", key=f"close_edit_empty_{form_key}"):
             st.session_state["edit_batch"] = None
             st.rerun()
         return
@@ -173,49 +212,37 @@ def render_edit_batch_form(batch_no):
     
     col1, col2 = st.columns(2)
     with col1:
+        # الصنف
         current_mat = str(row["الصنف"])
         mat_idx = materials_list.index(current_mat) if current_mat in materials_list else 0
-        new_mat = st.selectbox("🏷️ الصنف", materials_list, index=mat_idx, key="edit_batch_mat_form")
+        new_mat = st.selectbox("🏷️ الصنف", materials_list, index=mat_idx, key=f"{form_key}_mat")
         
+        # المخزن
         current_wh = str(row["المخزن"])
         wh_idx = warehouses_list.index(current_wh) if current_wh in warehouses_list else 0
-        new_wh = st.selectbox("🏭 المخزن", warehouses_list, index=wh_idx, key="edit_batch_wh_form")
+        new_wh = st.selectbox("🏭 المخزن", warehouses_list, index=wh_idx, key=f"{form_key}_wh")
         
-        try:
-            current_prod = pd.to_datetime(row["تاريخ الإنتاج"]).date()
-        except:
-            current_prod = date.today()
-        new_prod = st.date_input("🏭 تاريخ الإنتاج", value=current_prod, key="edit_batch_prod_form")
+        # التواريخ
+        current_prod = safe_date_parse(row["تاريخ الإنتاج"])
+        new_prod = st.date_input("🏭 تاريخ الإنتاج", value=current_prod, key=f"{form_key}_prod")
         
-        try:
-            current_exp = pd.to_datetime(row["تاريخ الانتهاء"]).date()
-        except:
-            current_exp = date.today()
-        new_exp = st.date_input("⏰ تاريخ الانتهاء", value=current_exp, key="edit_batch_exp_form")
+        current_exp = safe_date_parse(row["تاريخ الانتهاء"])
+        new_exp = st.date_input("⏰ تاريخ الانتهاء", value=current_exp, key=f"{form_key}_exp")
     
     with col2:
-        try:
-            current_arr = pd.to_datetime(row["تاريخ الوصول"]).date()
-        except:
-            current_arr = date.today()
-        new_arr = st.date_input("📅 تاريخ الوصول", value=current_arr, key="edit_batch_arr_form")
+        current_arr = safe_date_parse(row["تاريخ الوصول"])
+        new_arr = st.date_input("📅 تاريخ الوصول", value=current_arr, key=f"{form_key}_arr")
         
-        try:
-            current_weight = float(row["الوزن/عبوة (كجم)"])
-        except:
-            current_weight = 750.0
-        new_weight = st.number_input("⚖️ الوزن/عبوة (كجم)", min_value=0.0, step=10.0, value=current_weight, key="edit_batch_weight_form")
+        current_weight = safe_float_parse(row["الوزن/عبوة (كجم)"], 750.0)
+        new_weight = st.number_input("⚖️ الوزن/عبوة (كجم)", min_value=0.0, step=10.0, value=current_weight, key=f"{form_key}_weight")
         
-        try:
-            current_bags = int(row["عدد العبوات"])
-        except:
-            current_bags = 0
-        new_bags = st.number_input("📦 عدد العبوات", min_value=0, step=1, value=current_bags, key="edit_batch_bags_form")
+        current_bags = safe_int_parse(row["عدد العبوات"], 0)
+        new_bags = st.number_input("📦 عدد العبوات", min_value=0, step=1, value=current_bags, key=f"{form_key}_bags")
         
         new_total = new_weight * new_bags
         st.metric("📊 الكمية الكلية الجديدة", f"{new_total:,.0f} كجم")
     
-    new_notes = st.text_area("📝 ملاحظات", value=str(row.get("ملاحظات", "")), key="edit_batch_notes_form")
+    new_notes = st.text_area("📝 ملاحظات", value=str(row.get("ملاحظات", "")), key=f"{form_key}_notes")
     
     st.markdown("---")
     
@@ -225,7 +252,7 @@ def render_edit_batch_form(batch_no):
     col_save, col_cancel = st.columns(2)
     
     with col_save:
-        if st.button("💾 حفظ التعديلات", use_container_width=True, type="primary", key="save_edit_batch_form_btn"):
+        if st.button("💾 حفظ التعديلات", use_container_width=True, type="primary", key=f"{form_key}_save"):
             if new_total < issued_qty:
                 st.error("⚠️ الكمية الجديدة أقل من المصروفة")
             else:
@@ -248,18 +275,20 @@ def render_edit_batch_form(batch_no):
                 st.rerun()
     
     with col_cancel:
-        if st.button("❌ إلغاء", use_container_width=True, key="cancel_edit_batch_form_btn"):
+        if st.button("❌ إلغاء", use_container_width=True, key=f"{form_key}_cancel"):
             st.session_state["edit_batch"] = None
             st.rerun()
-
+            
 # ==================== فورم حذف الدفعة ====================
 def render_delete_batch_form(batch_no):
+    form_key = f"del_form_{str(batch_no).replace(' ', '_')}"
+    
     batches = load_batches()
     match = batches[batches["رقم الدفعة"].astype(str) == str(batch_no)]
     
     if match.empty:
         st.error("⚠️ الدفعة مش موجودة")
-        if st.button("إغلاق", key="close_del_empty"):
+        if st.button("إغلاق", key=f"close_del_empty_{form_key}"):
             st.session_state["delete_batch"] = None
             st.rerun()
         return
@@ -277,19 +306,23 @@ def render_delete_batch_form(batch_no):
         if not related.empty:
             st.markdown("**سندات الصرف المرتبطة:**")
             st.dataframe(related[["رقم الصرف", "التاريخ", "الكمية المصروفة (كجم)", "الجهة/الطلب"]], use_container_width=True, hide_index=True)
-        if st.button("❌ إغلاق", use_container_width=True, key="close_del_issued"):
+        if st.button("❌ إغلاق", use_container_width=True, key=f"close_del_issued_{form_key}"):
             st.session_state["delete_batch"] = None
             st.rerun()
     else:
         st.warning(f"⚠️ **هل أنت متأكد من حذف الدفعة** `{batch_no}` **؟**")
         st.markdown(f"**الصنف:** {row['الصنف']}")
         st.markdown(f"**المخزن:** {row['المخزن']}")
-        st.markdown(f"**الكمية الكلية:** {row['الكمية الكلية (كجم)']:,.0f} كجم")
+        try:
+            kk = float(row['الكمية الكلية (كجم)'])
+            st.markdown(f"**الكمية الكلية:** {kk:,.0f} كجم")
+        except:
+            st.markdown(f"**الكمية الكلية:** {row['الكمية الكلية (كجم)']}")
         st.markdown("**لا يمكن التراجع عن هذا الإجراء.**")
         
         col_yes, col_no = st.columns(2)
         with col_yes:
-            if st.button("✅ نعم، احذف", type="primary", use_container_width=True, key="confirm_del_form_btn"):
+            if st.button("✅ نعم، احذف", type="primary", use_container_width=True, key=f"{form_key}_confirm"):
                 full_df = load_batches()
                 full_df = full_df[full_df["رقم الدفعة"].astype(str) != str(batch_no)]
                 full_df.to_excel(BATCHES_FILE, index=False)
@@ -297,10 +330,106 @@ def render_delete_batch_form(batch_no):
                 st.success(f"✅ تم حذف الدفعة {batch_no}")
                 st.rerun()
         with col_no:
-            if st.button("❌ إلغاء", use_container_width=True, key="cancel_del_form_btn"):
+            if st.button("❌ إلغاء", use_container_width=True, key=f"{form_key}_cancel"):
                 st.session_state["delete_batch"] = None
                 st.rerun()
-                
+
+# ==================== فورم تعديل سند الصرف ====================
+def render_edit_issue_form(issue_no):
+    form_key = f"edit_issue_{str(issue_no).replace(' ', '_')}"
+    
+    issues = load_issues()
+    match = issues[issues["رقم الصرف"].astype(str) == str(issue_no)]
+    
+    if match.empty:
+        st.error("⚠️ السند مش موجود")
+        if st.button("إغلاق", key=f"close_edit_issue_empty_{form_key}"):
+            st.session_state["edit_issue"] = None
+            st.rerun()
+        return
+    
+    row = match.iloc[0]
+    
+    st.markdown(f"### ✏️ تعديل سند الصرف: `{issue_no}`")
+    st.markdown("---")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        current_date = safe_date_parse(row["التاريخ"])
+        new_date = st.date_input("📅 التاريخ", value=current_date, key=f"{form_key}_date")
+        
+        current_qty = safe_float_parse(row["الكمية المصروفة (كجم)"], 0.0)
+        new_qty = st.number_input("⚖️ الكمية المصروفة (كجم)", min_value=0.0, step=10.0, value=current_qty, key=f"{form_key}_qty")
+    
+    with col2:
+        new_to = st.text_input("🎯 الجهة/الطلب", value=str(row["الجهة/الطلب"]), key=f"{form_key}_to")
+        new_notes = st.text_area("📝 ملاحظات", value=str(row.get("ملاحظات", "")), key=f"{form_key}_notes")
+    
+    st.markdown("---")
+    
+    col_save, col_cancel = st.columns(2)
+    with col_save:
+        if st.button("💾 حفظ التعديلات", use_container_width=True, type="primary", key=f"{form_key}_save"):
+            full_df = load_issues()
+            mask = full_df["رقم الصرف"].astype(str) == str(issue_no)
+            idx = full_df[mask].index[0]
+            full_df.loc[idx, "التاريخ"] = str(new_date)
+            full_df.loc[idx, "الكمية المصروفة (كجم)"] = new_qty
+            full_df.loc[idx, "الجهة/الطلب"] = new_to.strip()
+            full_df.loc[idx, "ملاحظات"] = new_notes.strip()
+            full_df.to_excel(ISSUES_FILE, index=False)
+            st.session_state["edit_issue"] = None
+            st.success(f"✅ تم تحديث السند {issue_no}")
+            st.rerun()
+    
+    with col_cancel:
+        if st.button("❌ إلغاء", use_container_width=True, key=f"{form_key}_cancel"):
+            st.session_state["edit_issue"] = None
+            st.rerun()
+
+# ==================== فورم حذف سند الصرف ====================
+def render_delete_issue_form(issue_no):
+    form_key = f"del_issue_{str(issue_no).replace(' ', '_')}"
+    
+    issues = load_issues()
+    match = issues[issues["رقم الصرف"].astype(str) == str(issue_no)]
+    
+    if match.empty:
+        st.error("⚠️ السند مش موجود")
+        if st.button("إغلاق", key=f"close_del_issue_empty_{form_key}"):
+            st.session_state["delete_issue"] = None
+            st.rerun()
+        return
+    
+    row = match.iloc[0]
+    
+    st.markdown(f"### 🗑️ حذف سند الصرف: `{issue_no}`")
+    st.warning(f"⚠️ **هل أنت متأكد من حذف السند** `{issue_no}` **؟**")
+    st.markdown(f"**رقم الدفعة:** {row['رقم الدفعة']}")
+    st.markdown(f"**الصنف:** {row['الصنف']}")
+    
+    try:
+        qq = float(row['الكمية المصروفة (كجم)'])
+        st.markdown(f"**الكمية المصروفة:** {qq:,.0f} كجم")
+    except:
+        st.markdown(f"**الكمية المصروفة:** {row['الكمية المصروفة (كجم)']}")
+    
+    st.markdown("**ملاحظة:** حذف السند هيرجع الكمية للمخزون.")
+    
+    col_yes, col_no = st.columns(2)
+    with col_yes:
+        if st.button("✅ نعم، احذف", type="primary", use_container_width=True, key=f"{form_key}_confirm"):
+            full_df = load_issues()
+            full_df = full_df[full_df["رقم الصرف"].astype(str) != str(issue_no)]
+            full_df.to_excel(ISSUES_FILE, index=False)
+            st.session_state["delete_issue"] = None
+            st.success(f"✅ تم حذف السند {issue_no}")
+            st.rerun()
+    with col_no:
+        if st.button("❌ إلغاء", use_container_width=True, key=f"{form_key}_cancel"):
+            st.session_state["delete_issue"] = None
+            st.rerun()
+            
 # ==================== دالة القسم الرئيسية ====================
 def render_materials_section():
     init_materials_files()
@@ -394,6 +523,9 @@ def render_materials_section():
                 
                 for idx, row in expiring.iterrows():
                     days = row["أيام متبقية"]
+                    
+                    if days is None:
+                        continue
                     
                     if days < 0:
                         bg = "rgba(255, 23, 68, 0.2)"
@@ -673,6 +805,15 @@ def render_materials_section():
                 
                 with col_btn3:
                     st.markdown(f"**إجمالي المصروف:** {df_issues['الكمية المصروفة (كجم)'].sum():,.0f} كجم من **{len(df_issues)}** سند")
+                
+                # الفورمات بتظهر هنا تحت
+                if st.session_state.get("edit_issue"):
+                    st.markdown("---")
+                    render_edit_issue_form(st.session_state["edit_issue"])
+                
+                if st.session_state.get("delete_issue"):
+                    st.markdown("---")
+                    render_delete_issue_form(st.session_state["delete_issue"])
 
     # ==================== تبويب 3: عرض المخزون ====================
     with tab3:
@@ -715,7 +856,7 @@ def render_materials_section():
             for idx, row in filtered.iterrows():
                 status, days_left, icon = get_expiry_status(row["تاريخ الانتهاء"], warning_days, critical_days)
                 statuses.append(f"{icon} {status}")
-                days_left_list.append(days_left)
+                days_left_list.append(days_left if days_left is not None else 0)
             
             filtered["حالة الصلاحية"] = statuses
             filtered["أيام متبقية"] = days_left_list
@@ -792,7 +933,7 @@ def render_materials_section():
                 with col_btn3:
                     st.markdown("💡 **ملاحظة:** لتعديل أو حذف دفعة، علّم على ☑ جنبها واضغط الزر المناسب")
                 
-                # ==================== الفورم بيظهر هنا تحت الجدول ====================
+                # الفورم بيظهر هنا تحت الجدول
                 if st.session_state.get("edit_batch"):
                     st.markdown("---")
                     render_edit_batch_form(st.session_state["edit_batch"])
@@ -804,7 +945,7 @@ def render_materials_section():
                 total = filtered["الكمية المتبقية (كجم)"].sum()
                 st.markdown("---")
                 st.markdown(f"### 💰 إجمالي الرصيد المعروض: **{total:,.0f} كجم**")
-                
+
     # ==================== تبويب 4: التقارير ====================
     with tab4:
         st.subheader("📊 تقارير المواد الخام")
