@@ -284,7 +284,7 @@ def render_delete_record_form(record_id):
         if st.button("❌ إلغاء", use_container_width=True, key=f"{form_key}_cancel"):
             st.session_state["delete_perf_record"] = None
             st.rerun()
-
+            
 # ==================== دالة القسم الرئيسية ====================
 def render_performance_section():
     init_performance_files()
@@ -446,122 +446,172 @@ def render_performance_section():
                         st.dataframe(low_monthly[["الترتيب", "العامل", "متوسط الدقة (%)", "عدد الجردات"]], use_container_width=True, hide_index=True)
                 else:
                     st.info("📭 مفيش بيانات كافية")
-
+                    
     # ==================== تبويب 1: إدخال جرد يومي ====================
     with tab1:
-        st.subheader("➕ إدخال جرد يومي جديد")
+        st.subheader("➕ إدخال سجل جرد جديد")
         
         st.markdown("""
-        **ملاحظة:** عدد الأصناف المجرودة **واحد لكل العمال** في نفس اليوم.
+        **ملاحظة:** كل سجل = **عامل واحد** بس.
         
-        أدخل عدد الأصناف، وبعدين حدد عدد الأخطاء لكل عامل (سيبه 0 لو العامل ماجردش في اليوم ده).
+        لو عايز تسجل أكثر من عامل في نفس اليوم، سجل عامل واحد، وبعدها التاريخ والمخزن وعدد الأصناف هيفضلوا موجودين عشان تسجل العامل اللي بعده بسرعة.
         """)
         
         st.markdown("---")
         
-        col1, col2, col3 = st.columns(3)
+        # قيم افتراضية
+        if "perf_last_date" not in st.session_state:
+            st.session_state["perf_last_date"] = date.today()
+        if "perf_last_wh" not in st.session_state:
+            st.session_state["perf_last_wh"] = "-- اختر --"
+        if "perf_last_items" not in st.session_state:
+            st.session_state["perf_last_items"] = 0
+        
+        col1, col2 = st.columns(2)
         
         with col1:
-            record_id = st.text_input("🔢 رقم السجل *", value=get_next_record_id(), key="new_perf_id")
+            entry_date = st.date_input(
+                "📅 التاريخ *",
+                value=st.session_state["perf_last_date"],
+                key="new_perf_date"
+            )
+            
+            wh_options = ["-- اختر --"] + warehouses_list
+            wh_default_idx = wh_options.index(st.session_state["perf_last_wh"]) if st.session_state["perf_last_wh"] in wh_options else 0
+            warehouse = st.selectbox(
+                "🏭 المخزن *",
+                wh_options,
+                index=wh_default_idx,
+                key="new_perf_wh"
+            )
         
         with col2:
-            entry_date = st.date_input("📅 التاريخ *", value=date.today(), key="new_perf_date")
+            total_items = st.number_input(
+                "📦 عدد الأصناف المجرودة *",
+                min_value=0,
+                step=1,
+                value=st.session_state["perf_last_items"],
+                key="new_perf_items"
+            )
         
-        with col3:
-            warehouse = st.selectbox("🏭 المخزن *", ["-- اختر --"] + warehouses_list, key="new_perf_wh")
+        st.markdown("---")
+        st.markdown("### 👤 بيانات العامل")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            worker_name = st.selectbox(
+                "👤 اسم العامل *",
+                ["-- اختر --"] + workers_list,
+                key="new_perf_worker_select"
+            )
+        
+        with col2:
+            worker_errors = st.number_input(
+                "❌ عدد الأخطاء *",
+                min_value=0,
+                step=1,
+                value=0,
+                key="new_perf_errors"
+            )
+        
+        # عرض الدقة
+        if worker_name != "-- اختر --" and total_items > 0:
+            accuracy = calculate_accuracy(total_items, worker_errors)
+            
+            if accuracy >= 95:
+                color = "#39ff14"
+                icon = "🟢"
+            elif accuracy >= 90:
+                color = "#ffb400"
+                icon = "🟡"
+            else:
+                color = "#ff1744"
+                icon = "🔴"
+            
+            st.markdown(f"""
+            <div style="background: rgba(20,20,40,0.6); border: 2px solid {color}; border-radius: 12px; padding: 15px; text-align: center; margin-top: 10px;">
+                <div style="font-size: 16px; color: rgba(255,255,255,0.8);">📊 دقة العامل {worker_name}</div>
+                <div style="font-size: 36px; font-weight: bold; color: {color}; margin: 10px 0;">{icon} {accuracy:.2f}%</div>
+                <div style="font-size: 13px; color: rgba(255,255,255,0.6);">({total_items} - {worker_errors}) ÷ {total_items} × 100</div>
+            </div>
+            """, unsafe_allow_html=True)
         
         st.markdown("---")
         
-        total_items = st.number_input("📦 عدد الأصناف المجرودة (لكل العمال) *", min_value=0, step=1, value=0, key="new_perf_items")
-        
-        st.markdown("---")
-        st.markdown("### 👥 الأخطاء لكل عامل")
-        st.caption("سيبه 0 لو العامل ماجردش في اليوم ده")
-        
-        num_workers = len(workers_list)
-        cols_per_row = 3
-        
-        worker_errors = {}
-        
-        for i in range(0, num_workers, cols_per_row):
-            cols = st.columns(cols_per_row)
-            for j in range(cols_per_row):
-                if i + j < num_workers:
-                    worker = workers_list[i + j]
-                    with cols[j]:
-                        errors = st.number_input(
-                            f"👤 {worker} - عدد الأخطاء",
-                            min_value=0,
-                            step=1,
-                            value=0,
-                            key=f"new_perf_errors_{worker}"
-                        )
-                        accuracy = calculate_accuracy(total_items, errors)
-                        if total_items > 0:
-                            st.caption(f"📊 الدقة: **{accuracy:.2f}%**")
-                        worker_errors[worker] = errors
+        notes = st.text_area("📝 ملاحظات (اختياري)", placeholder="أي تفاصيل إضافية", key="new_perf_notes")
         
         st.markdown("---")
         
-        notes = st.text_area("📝 ملاحظات عامة (اختياري)", placeholder="أي تفاصيل إضافية", key="new_perf_notes")
+        col_btn1, col_btn2 = st.columns([3, 1])
         
-        st.markdown("---")
+        with col_btn1:
+            submitted = st.button("💾 حفظ السجل", use_container_width=True, type="primary", key="save_perf_data_btn")
         
-        submitted = st.button("💾 حفظ السجلات", use_container_width=True, type="primary", key="save_perf_data_btn")
+        with col_btn2:
+            clear_btn = st.button("🔄 تفريغ الخانات", use_container_width=True, key="clear_perf_data_btn")
         
+        # زر التفريغ
+        if clear_btn:
+            st.session_state["perf_last_date"] = date.today()
+            st.session_state["perf_last_wh"] = "-- اختر --"
+            st.session_state["perf_last_items"] = 0
+            if "new_perf_worker_select" in st.session_state:
+                del st.session_state["new_perf_worker_select"]
+            if "new_perf_errors" in st.session_state:
+                del st.session_state["new_perf_errors"]
+            if "new_perf_notes" in st.session_state:
+                del st.session_state["new_perf_notes"]
+            st.success("✅ تم تفريغ الخانات")
+            st.rerun()
+        
+        # زر الحفظ
         if submitted:
             errors_list = []
-            if not record_id.strip(): errors_list.append("رقم السجل مطلوب")
             if warehouse == "-- اختر --": errors_list.append("المخزن مطلوب")
+            if worker_name == "-- اختر --": errors_list.append("اسم العامل مطلوب")
             if total_items <= 0: errors_list.append("عدد الأصناف لازم يكون أكبر من صفر")
+            if worker_errors > total_items: errors_list.append(f"عدد الأخطاء ({worker_errors}) أكبر من عدد الأصناف ({total_items})")
             
             if errors_list:
                 for err in errors_list:
                     st.error(f"⚠️ {err}")
             else:
-                existing_data = load_perf_data()
-                if not existing_data.empty:
-                    existing = existing_data[existing_data["رقم السجل"].astype(str) == record_id.strip()]
-                    if not existing.empty:
-                        st.error(f"🚫 رقم السجل ({record_id}) مستخدم من قبل!")
-                        st.stop()
+                new_id = get_next_record_id()
+                accuracy = calculate_accuracy(total_items, worker_errors)
                 
-                validation_errors = []
-                for worker, errors in worker_errors.items():
-                    if errors > total_items:
-                        validation_errors.append(f"{worker}: {errors} خطأ > {total_items} صنف")
+                new_row = {
+                    "رقم السجل": new_id,
+                    "التاريخ": str(entry_date),
+                    "المخزن": warehouse,
+                    "عدد الأصناف المجرودة": total_items,
+                    "اسم العامل": worker_name,
+                    "عدد الأخطاء": worker_errors,
+                    "الدقة (%)": accuracy,
+                    "ملاحظات": notes.strip()
+                }
                 
-                if validation_errors:
-                    for err in validation_errors:
-                        st.error(f"⚠️ {err}")
-                else:
-                    full_df = load_perf_data()
-                    saved_count = 0
-                    
-                    for idx, (worker, errors) in enumerate(worker_errors.items()):
-                        accuracy = calculate_accuracy(total_items, errors)
-                        
-                        if idx == 0:
-                            sub_id = record_id.strip()
-                        else:
-                            sub_id = f"{record_id.strip()}-{idx+1:02d}"
-                        
-                        new_row = {
-                            "رقم السجل": sub_id,
-                            "التاريخ": str(entry_date),
-                            "المخزن": warehouse,
-                            "عدد الأصناف المجرودة": total_items,
-                            "اسم العامل": worker,
-                            "عدد الأخطاء": errors,
-                            "الدقة (%)": accuracy,
-                            "ملاحظات": notes.strip()
-                        }
-                        full_df = pd.concat([full_df, pd.DataFrame([new_row])], ignore_index=True)
-                        saved_count += 1
-                    
-                    save_perf_data(full_df)
-                    st.success(f"✅ تم حفظ {saved_count} سجل بتاريخ {entry_date}")
-                    st.balloons()
+                full_df = load_perf_data()
+                full_df = pd.concat([full_df, pd.DataFrame([new_row])], ignore_index=True)
+                save_perf_data(full_df)
+                
+                # نحفظ التاريخ والمخزن وعدد الأصناف
+                st.session_state["perf_last_date"] = entry_date
+                st.session_state["perf_last_wh"] = warehouse
+                st.session_state["perf_last_items"] = total_items
+                
+                # نفضي العامل والأخطاء
+                if "new_perf_worker_select" in st.session_state:
+                    del st.session_state["new_perf_worker_select"]
+                if "new_perf_errors" in st.session_state:
+                    del st.session_state["new_perf_errors"]
+                if "new_perf_notes" in st.session_state:
+                    del st.session_state["new_perf_notes"]
+                
+                st.success(f"✅ تم حفظ السجل **{new_id}** — العامل: {worker_name} — الدقة: {accuracy:.2f}%")
+                st.info("💡 التاريخ والمخزن وعدد الأصناف محفوظين — جاهز لإدخال العامل التالي")
+                st.balloons()
+                st.rerun()
     
     # ==================== تبويب 2: عرض السجلات ====================
     with tab2:
@@ -680,7 +730,7 @@ def render_performance_section():
                 if st.session_state.get("delete_perf_record"):
                     st.markdown("---")
                     render_delete_record_form(st.session_state["delete_perf_record"])
-
+                    
     # ==================== تبويب 3: التقارير ====================
     with tab3:
         st.subheader("📊 تقارير وتحليلات الأداء")
@@ -845,7 +895,7 @@ def render_performance_section():
                     display_worker["التاريخ"] = display_worker["التاريخ_dt"].dt.strftime("%Y-%m-%d")
                     display_worker = display_worker.sort_values("التاريخ", ascending=False)
                     st.dataframe(display_worker, use_container_width=True, hide_index=True)
-
+                    
     # ==================== تبويب 4: الإعدادات ====================
     with tab4:
         st.subheader("⚙️ إعدادات قسم مؤشر الأداء")
