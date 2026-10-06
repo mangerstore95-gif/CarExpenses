@@ -4,13 +4,11 @@ from datetime import date, datetime, timedelta
 import os
 import plotly.graph_objects as go
 
-# ==================== الملفات ====================
 PERF_WORKERS_FILE = "performance_workers.xlsx"
 PERF_WAREHOUSES_FILE = "performance_warehouses.xlsx"
 PERF_DATA_FILE = "performance_data.xlsx"
 PERF_SETTINGS_FILE = "performance_settings.xlsx"
 
-# ==================== البيانات الافتراضية ====================
 DEFAULT_WORKERS = ["احد", "سيف", "دبيندرا", "اوشيما", "جمساد"]
 DEFAULT_WAREHOUSES = ["مخزن صبحان", "مخزن الشويخ", "مخزن الوفرة", "مخزن العبدلي"]
 
@@ -19,17 +17,13 @@ DEFAULT_SETTINGS = {
     "حد التنبيه الشهري (%)": 95,
 }
 
-# ==================== دوال الحفظ والتحميل ====================
 def init_performance_files():
     if not os.path.exists(PERF_WORKERS_FILE):
         pd.DataFrame({"العامل": DEFAULT_WORKERS}).to_excel(PERF_WORKERS_FILE, index=False)
     if not os.path.exists(PERF_WAREHOUSES_FILE):
         pd.DataFrame({"المخزن": DEFAULT_WAREHOUSES}).to_excel(PERF_WAREHOUSES_FILE, index=False)
     if not os.path.exists(PERF_DATA_FILE):
-        df = pd.DataFrame(columns=[
-            "رقم السجل", "التاريخ", "المخزن", "عدد الأصناف المجرودة",
-            "اسم العامل", "عدد الأخطاء", "الدقة (%)", "ملاحظات"
-        ])
+        df = pd.DataFrame(columns=["رقم السجل", "التاريخ", "المخزن", "عدد الأصناف المجرودة", "اسم العامل", "عدد الأخطاء", "الدقة (%)", "ملاحظات"])
         df.to_excel(PERF_DATA_FILE, index=False)
     if not os.path.exists(PERF_SETTINGS_FILE):
         pd.DataFrame([DEFAULT_SETTINGS]).to_excel(PERF_SETTINGS_FILE, index=False)
@@ -83,7 +77,6 @@ def save_perf_data(df):
 def save_perf_settings(settings):
     pd.DataFrame([settings]).to_excel(PERF_SETTINGS_FILE, index=False)
 
-# ==================== دوال الحساب ====================
 def calculate_accuracy(total_items, errors):
     try:
         total_items = float(total_items)
@@ -106,28 +99,21 @@ def get_next_record_id():
 def get_worker_stats(worker_name, date_from=None, date_to=None):
     df = load_perf_data()
     empty = {"count": 0, "avg": 0.0, "max": 0.0, "min": 0.0, "total_errors": 0}
-    
     if df.empty:
         return empty
-    
     df_filtered = df[df["اسم العامل"].astype(str) == str(worker_name)].copy()
-    
     if df_filtered.empty:
         return empty
-    
     if date_from is not None and date_to is not None:
         df_filtered["التاريخ_dt"] = pd.to_datetime(df_filtered["التاريخ"], errors="coerce")
         df_filtered = df_filtered[
             (df_filtered["التاريخ_dt"].dt.date >= date_from) &
             (df_filtered["التاريخ_dt"].dt.date <= date_to)
         ]
-    
     if df_filtered.empty:
         return empty
-    
     df_filtered["الدقة (%)"] = pd.to_numeric(df_filtered["الدقة (%)"], errors="coerce")
     df_filtered["عدد الأخطاء"] = pd.to_numeric(df_filtered["عدد الأخطاء"], errors="coerce")
-    
     return {
         "count": len(df_filtered),
         "avg": round(df_filtered["الدقة (%)"].mean(), 2),
@@ -139,7 +125,6 @@ def get_worker_stats(worker_name, date_from=None, date_to=None):
 def get_all_workers_ranking(date_from=None, date_to=None):
     workers = load_perf_workers()
     results = []
-    
     for worker in workers:
         stats = get_worker_stats(worker, date_from, date_to)
         if stats["count"] > 0:
@@ -151,7 +136,6 @@ def get_all_workers_ranking(date_from=None, date_to=None):
                 "أقل دقة (%)": stats["min"],
                 "إجمالي الأخطاء": stats["total_errors"],
             })
-    
     if results:
         df = pd.DataFrame(results)
         df = df.sort_values("متوسط الدقة (%)", ascending=False).reset_index(drop=True)
@@ -159,69 +143,52 @@ def get_all_workers_ranking(date_from=None, date_to=None):
         return df
     return pd.DataFrame()
 
-# ==================== فورم تعديل سجل ====================
 def render_edit_record_form(record_id):
     form_key = f"edit_perf_{str(record_id).replace(' ', '_').replace('/', '_')}"
-    
     df = load_perf_data()
     match = df[df["رقم السجل"].astype(str) == str(record_id)]
-    
     if match.empty:
         st.error("⚠️ السجل مش موجود")
         if st.button("إغلاق", key=f"close_{form_key}"):
             st.session_state["edit_perf_record"] = None
             st.rerun()
         return
-    
     row = match.iloc[0]
     workers_list = load_perf_workers()
     warehouses_list = load_perf_warehouses()
-    
     st.markdown(f"### ✏️ تعديل السجل: `{record_id}`")
     st.markdown("---")
-    
     col1, col2 = st.columns(2)
-    
     with col1:
         try:
             cur_date = pd.to_datetime(row["التاريخ"]).date()
         except:
             cur_date = date.today()
         new_date = st.date_input("📅 التاريخ", value=cur_date, key=f"{form_key}_date")
-        
         cur_wh = str(row["المخزن"])
         wh_idx = warehouses_list.index(cur_wh) if cur_wh in warehouses_list else 0
         new_wh = st.selectbox("🏭 المخزن", warehouses_list, index=wh_idx, key=f"{form_key}_wh")
-        
         try:
             cur_items = int(float(row["عدد الأصناف المجرودة"]))
         except:
             cur_items = 0
         new_items = st.number_input("📦 عدد الأصناف المجرودة", min_value=0, step=1, value=cur_items, key=f"{form_key}_items")
-    
     with col2:
         cur_worker = str(row["اسم العامل"])
         w_idx = workers_list.index(cur_worker) if cur_worker in workers_list else 0
         new_worker = st.selectbox("👤 اسم العامل", workers_list, index=w_idx, key=f"{form_key}_worker")
-        
         try:
             cur_errors = int(float(row["عدد الأخطاء"]))
         except:
             cur_errors = 0
         new_errors = st.number_input("❌ عدد الأخطاء", min_value=0, step=1, value=cur_errors, key=f"{form_key}_errors")
-        
         new_accuracy = calculate_accuracy(new_items, new_errors)
         st.metric("📊 الدقة (%)", f"{new_accuracy:.2f}%")
-    
     new_notes = st.text_area("📝 ملاحظات", value=str(row.get("ملاحظات", "")), key=f"{form_key}_notes")
-    
     st.markdown("---")
-    
     if new_errors > new_items:
         st.error(f"🚫 عدد الأخطاء ({new_errors}) أكبر من عدد الأصناف ({new_items})!")
-    
     col_save, col_cancel = st.columns(2)
-    
     with col_save:
         if st.button("💾 حفظ التعديلات", use_container_width=True, type="primary", key=f"{form_key}_save"):
             if new_errors > new_items:
@@ -240,28 +207,22 @@ def render_edit_record_form(record_id):
                 save_perf_data(full_df)
                 st.session_state["edit_perf_record"] = None
                 st.rerun()
-    
     with col_cancel:
         if st.button("❌ إلغاء", use_container_width=True, key=f"{form_key}_cancel"):
             st.session_state["edit_perf_record"] = None
             st.rerun()
 
-# ==================== فورم حذف سجل ====================
 def render_delete_record_form(record_id):
     form_key = f"del_perf_{str(record_id).replace(' ', '_').replace('/', '_')}"
-    
     df = load_perf_data()
     match = df[df["رقم السجل"].astype(str) == str(record_id)]
-    
     if match.empty:
         st.error("⚠️ السجل مش موجود")
         if st.button("إغلاق", key=f"close_{form_key}"):
             st.session_state["delete_perf_record"] = None
             st.rerun()
         return
-    
     row = match.iloc[0]
-    
     st.markdown(f"### 🗑️ حذف السجل: `{record_id}`")
     st.warning(f"⚠️ **هل أنت متأكد من حذف السجل** `{record_id}` **؟**")
     st.markdown(f"**التاريخ:** {row['التاريخ']}")
@@ -271,7 +232,6 @@ def render_delete_record_form(record_id):
     st.markdown(f"**عدد الأخطاء:** {row['عدد الأخطاء']}")
     st.markdown(f"**الدقة:** {row['الدقة (%)']}%")
     st.markdown("**لا يمكن التراجع عن هذا الإجراء.**")
-    
     col_yes, col_no = st.columns(2)
     with col_yes:
         if st.button("✅ نعم، احذف", type="primary", use_container_width=True, key=f"{form_key}_confirm"):
@@ -285,7 +245,6 @@ def render_delete_record_form(record_id):
             st.session_state["delete_perf_record"] = None
             st.rerun()
             
-# ==================== دالة القسم الرئيسية ====================
 def render_performance_section():
     init_performance_files()
     
@@ -304,15 +263,13 @@ def render_performance_section():
         "⚙️ الإعدادات"
     ])
     
-    # ==================== تبويب 0: لوحة المعلومات ====================
     with tab0:
         st.subheader("📊 لوحة معلومات الأداء")
-        
         data = load_perf_data()
         settings = load_perf_settings()
         
         if data.empty:
-            st.info("📭 مفيش بيانات مسجلة لحد الآن. ابدأ بإدخال جرد يومي من تبويب '➕ إدخال جرد يومي'")
+            st.info("📭 مفيش بيانات مسجلة لحد الآن")
         else:
             data["الدقة (%)"] = pd.to_numeric(data["الدقة (%)"], errors="coerce")
             data["التاريخ_dt"] = pd.to_datetime(data["التاريخ"], errors="coerce")
@@ -323,37 +280,33 @@ def render_performance_section():
             total_errors = int(pd.to_numeric(data["عدد الأخطاء"], errors="coerce").sum())
             
             col1, col2, col3, col4 = st.columns(4)
-            
             with col1:
                 st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 5px 15px rgba(102,126,234,0.4);">
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 15px; text-align: center; color: white;">
                     <div style="font-size: 14px;">📋 إجمالي السجلات</div>
                     <div style="font-size: 28px; font-weight: bold; margin: 10px 0;">{total_records}</div>
-                    <div style="font-size: 13px;">سجل جرد</div>
+                    <div style="font-size: 13px;">سجل</div>
                 </div>
                 """, unsafe_allow_html=True)
-            
             with col2:
                 st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 20px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 5px 15px rgba(245,87,108,0.4);">
+                <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 20px; border-radius: 15px; text-align: center; color: white;">
                     <div style="font-size: 14px;">👥 عدد العمال</div>
                     <div style="font-size: 28px; font-weight: bold; margin: 10px 0;">{total_workers}</div>
                     <div style="font-size: 13px;">عامل</div>
                 </div>
                 """, unsafe_allow_html=True)
-            
             with col3:
                 st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 20px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 5px 15px rgba(79,172,254,0.4);">
+                <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 20px; border-radius: 15px; text-align: center; color: white;">
                     <div style="font-size: 14px;">📊 متوسط الدقة</div>
                     <div style="font-size: 28px; font-weight: bold; margin: 10px 0;">{avg_accuracy:.2f}%</div>
                     <div style="font-size: 13px;">من كل السجلات</div>
                 </div>
                 """, unsafe_allow_html=True)
-            
             with col4:
                 st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); padding: 20px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 5px 15px rgba(67,233,123,0.4);">
+                <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); padding: 20px; border-radius: 15px; text-align: center; color: white;">
                     <div style="font-size: 14px;">❌ إجمالي الأخطاء</div>
                     <div style="font-size: 28px; font-weight: bold; margin: 10px 0;">{total_errors}</div>
                     <div style="font-size: 13px;">خطأ</div>
@@ -363,9 +316,7 @@ def render_performance_section():
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("---")
             
-            # ==================== ترتيب العمال ====================
             st.markdown("### 🏆 ترتيب العمال (كل البيانات)")
-            
             ranking = get_all_workers_ranking()
             
             if ranking.empty:
@@ -373,37 +324,31 @@ def render_performance_section():
             else:
                 if len(ranking) >= 3:
                     col1, col2, col3 = st.columns(3)
-                    
                     with col1:
                         second = ranking.iloc[1]
                         st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 100%); padding: 20px; border-radius: 15px; text-align: center; color: #333; box-shadow: 0 5px 15px rgba(192,192,192,0.4);">
+                        <div style="background: linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 100%); padding: 20px; border-radius: 15px; text-align: center; color: #333;">
                             <div style="font-size: 40px;">🥈</div>
                             <div style="font-size: 20px; font-weight: bold; margin: 10px 0;">{second['العامل']}</div>
-                            <div style="font-size: 24px; font-weight: bold; color: #333;">{second['متوسط الدقة (%)']:.2f}%</div>
-                            <div style="font-size: 12px; color: #666;">المركز الثاني</div>
+                            <div style="font-size: 24px; font-weight: bold;">{second['متوسط الدقة (%)']:.2f}%</div>
                         </div>
                         """, unsafe_allow_html=True)
-                    
                     with col2:
                         first = ranking.iloc[0]
                         st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%); padding: 25px; border-radius: 15px; text-align: center; color: #333; box-shadow: 0 8px 25px rgba(255,215,0,0.5);">
+                        <div style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%); padding: 25px; border-radius: 15px; text-align: center; color: #333;">
                             <div style="font-size: 50px;">🥇</div>
                             <div style="font-size: 24px; font-weight: bold; margin: 10px 0;">{first['العامل']}</div>
-                            <div style="font-size: 28px; font-weight: bold; color: #333;">{first['متوسط الدقة (%)']:.2f}%</div>
-                            <div style="font-size: 13px; color: #666;">المركز الأول</div>
+                            <div style="font-size: 28px; font-weight: bold;">{first['متوسط الدقة (%)']:.2f}%</div>
                         </div>
                         """, unsafe_allow_html=True)
-                    
                     with col3:
                         third = ranking.iloc[2]
                         st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #cd7f32 0%, #e8a866 100%); padding: 20px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 5px 15px rgba(205,127,50,0.4);">
+                        <div style="background: linear-gradient(135deg, #cd7f32 0%, #e8a866 100%); padding: 20px; border-radius: 15px; text-align: center; color: white;">
                             <div style="font-size: 40px;">🥉</div>
                             <div style="font-size: 20px; font-weight: bold; margin: 10px 0;">{third['العامل']}</div>
-                            <div style="font-size: 24px; font-weight: bold; color: white;">{third['متوسط الدقة (%)']:.2f}%</div>
-                            <div style="font-size: 12px; color: #ffe;">المركز الثالث</div>
+                            <div style="font-size: 24px; font-weight: bold;">{third['متوسط الدقة (%)']:.2f}%</div>
                         </div>
                         """, unsafe_allow_html=True)
                 
@@ -411,43 +356,30 @@ def render_performance_section():
                 st.dataframe(ranking, use_container_width=True, hide_index=True)
             
             st.markdown("---")
-            
-            # ==================== التنبيهات ====================
             st.markdown("### 🚨 التنبيهات")
             
             daily_threshold = float(settings.get("حد التنبيه اليومي (%)", 90))
             monthly_threshold = float(settings.get("حد التنبيه الشهري (%)", 95))
             
             col1, col2 = st.columns(2)
-            
             with col1:
-                st.markdown(f"#### ⚠️ تنبيهات يومية (دقة أقل من {daily_threshold}%)")
-                
+                st.markdown(f"#### ⚠️ تنبيهات يومية (أقل من {daily_threshold}%)")
                 low_daily = data[data["الدقة (%)"] < daily_threshold].copy()
-                
                 if low_daily.empty:
-                    st.success(f"✅ مفيش أي جردة دقتها أقل من {daily_threshold}%")
+                    st.success(f"✅ مفيش جردات أقل من {daily_threshold}%")
                 else:
-                    st.markdown(f"**عدد الجردات اللي دقتها أقل: {len(low_daily)}**")
-                    low_daily_display = low_daily[["التاريخ", "اسم العامل", "عدد الأصناف المجرودة", "عدد الأخطاء", "الدقة (%)"]].copy()
-                    low_daily_display = low_daily_display.sort_values("الدقة (%)")
-                    st.dataframe(low_daily_display.head(10), use_container_width=True, hide_index=True)
-            
+                    st.dataframe(low_daily[["التاريخ", "اسم العامل", "الدقة (%)"]].sort_values("الدقة (%)").head(10), use_container_width=True, hide_index=True)
             with col2:
-                st.markdown(f"#### ⚠️ تنبيهات شهرية (متوسط أقل من {monthly_threshold}%)")
-                
+                st.markdown(f"#### ⚠️ تنبيهات شهرية (أقل من {monthly_threshold}%)")
                 if not ranking.empty:
                     low_monthly = ranking[ranking["متوسط الدقة (%)"] < monthly_threshold]
-                    
                     if low_monthly.empty:
-                        st.success(f"✅ كل العمال متوسطهم أعلى من {monthly_threshold}%")
+                        st.success(f"✅ كل العمال أعلى من {monthly_threshold}%")
                     else:
-                        st.markdown(f"**عدد العمال اللي متوسطهم أقل: {len(low_monthly)}**")
-                        st.dataframe(low_monthly[["الترتيب", "العامل", "متوسط الدقة (%)", "عدد الجردات"]], use_container_width=True, hide_index=True)
+                        st.dataframe(low_monthly[["الترتيب", "العامل", "متوسط الدقة (%)"]], use_container_width=True, hide_index=True)
                 else:
-                    st.info("📭 مفيش بيانات كافية")
+                    st.info("📭 مفيش بيانات")
                     
-    # ==================== تبويب 1: إدخال جرد يومي ====================
     with tab1:
         st.subheader("➕ إدخال سجل جرد جديد")
         
@@ -459,7 +391,6 @@ def render_performance_section():
         
         st.markdown("---")
         
-        # قيم افتراضية
         if "perf_last_date" not in st.session_state:
             st.session_state["perf_last_date"] = date.today()
         if "perf_last_wh" not in st.session_state:
@@ -515,7 +446,6 @@ def render_performance_section():
                 key="new_perf_errors"
             )
         
-        # عرض الدقة
         if worker_name != "-- اختر --" and total_items > 0:
             accuracy = calculate_accuracy(total_items, worker_errors)
             
@@ -551,21 +481,16 @@ def render_performance_section():
         with col_btn2:
             clear_btn = st.button("🔄 تفريغ الخانات", use_container_width=True, key="clear_perf_data_btn")
         
-        # زر التفريغ
         if clear_btn:
             st.session_state["perf_last_date"] = date.today()
             st.session_state["perf_last_wh"] = "-- اختر --"
             st.session_state["perf_last_items"] = 0
-            if "new_perf_worker_select" in st.session_state:
-                del st.session_state["new_perf_worker_select"]
-            if "new_perf_errors" in st.session_state:
-                del st.session_state["new_perf_errors"]
-            if "new_perf_notes" in st.session_state:
-                del st.session_state["new_perf_notes"]
+            for k in ["new_perf_worker_select", "new_perf_errors", "new_perf_notes"]:
+                if k in st.session_state:
+                    del st.session_state[k]
             st.success("✅ تم تفريغ الخانات")
             st.rerun()
         
-        # زر الحفظ
         if submitted:
             errors_list = []
             if warehouse == "-- اختر --": errors_list.append("المخزن مطلوب")
@@ -595,28 +520,21 @@ def render_performance_section():
                 full_df = pd.concat([full_df, pd.DataFrame([new_row])], ignore_index=True)
                 save_perf_data(full_df)
                 
-                # نحفظ التاريخ والمخزن وعدد الأصناف
                 st.session_state["perf_last_date"] = entry_date
                 st.session_state["perf_last_wh"] = warehouse
                 st.session_state["perf_last_items"] = total_items
                 
-                # نفضي العامل والأخطاء
-                if "new_perf_worker_select" in st.session_state:
-                    del st.session_state["new_perf_worker_select"]
-                if "new_perf_errors" in st.session_state:
-                    del st.session_state["new_perf_errors"]
-                if "new_perf_notes" in st.session_state:
-                    del st.session_state["new_perf_notes"]
+                for k in ["new_perf_worker_select", "new_perf_errors", "new_perf_notes"]:
+                    if k in st.session_state:
+                        del st.session_state[k]
                 
                 st.success(f"✅ تم حفظ السجل **{new_id}** — العامل: {worker_name} — الدقة: {accuracy:.2f}%")
                 st.info("💡 التاريخ والمخزن وعدد الأصناف محفوظين — جاهز لإدخال العامل التالي")
                 st.balloons()
                 st.rerun()
     
-    # ==================== تبويب 2: عرض السجلات ====================
     with tab2:
         st.subheader("📋 سجلات الجرد")
-        
         data = load_perf_data()
         
         if data.empty:
@@ -654,7 +572,6 @@ def render_performance_section():
                 total_records = len(filtered)
                 avg_acc = round(filtered["الدقة (%)"].mean(), 2)
                 total_err = int(filtered["عدد الأخطاء"].sum())
-                
                 st.markdown(f"**عدد السجلات: {total_records}** | **متوسط الدقة: {avg_acc:.2f}%** | **إجمالي الأخطاء: {total_err}**")
             
             st.markdown("---")
@@ -704,8 +621,7 @@ def render_performance_section():
                         elif len(selected) > 1:
                             st.error("⚠️ اختار سجل واحد بس")
                         else:
-                            rec_id = str(selected.iloc[0]["رقم السجل"])
-                            st.session_state["edit_perf_record"] = rec_id
+                            st.session_state["edit_perf_record"] = str(selected.iloc[0]["رقم السجل"])
                             st.rerun()
                 
                 with col_btn2:
@@ -716,8 +632,7 @@ def render_performance_section():
                         elif len(selected) > 1:
                             st.error("⚠️ اختار سجل واحد بس")
                         else:
-                            rec_id = str(selected.iloc[0]["رقم السجل"])
-                            st.session_state["delete_perf_record"] = rec_id
+                            st.session_state["delete_perf_record"] = str(selected.iloc[0]["رقم السجل"])
                             st.rerun()
                 
                 with col_btn3:
@@ -731,10 +646,8 @@ def render_performance_section():
                     st.markdown("---")
                     render_delete_record_form(st.session_state["delete_perf_record"])
                     
-    # ==================== تبويب 3: التقارير ====================
     with tab3:
         st.subheader("📊 تقارير وتحليلات الأداء")
-        
         data = load_perf_data()
         
         if data.empty:
@@ -762,7 +675,6 @@ def render_performance_section():
                 st.warning("⚠️ مفيش بيانات في الفترة المحددة")
             else:
                 st.markdown("---")
-                
                 st.markdown("### 💡 ملخص الفترة")
                 col1, col2, col3, col4 = st.columns(4)
                 col1.metric("📋 عدد السجلات", len(filtered))
@@ -771,7 +683,6 @@ def render_performance_section():
                 col4.metric("👥 عدد العمال", filtered["اسم العامل"].nunique())
                 
                 st.markdown("---")
-                
                 st.markdown("### 🏆 ترتيب العمال في الفترة")
                 
                 ranking = get_all_workers_ranking(date_from, date_to)
@@ -808,17 +719,12 @@ def render_performance_section():
                     st.plotly_chart(fig_rank, use_container_width=True)
                 
                 st.markdown("---")
-                
                 st.markdown("### 📈 تطور الأداء خلال الفترة")
                 
-                top_workers_data = filtered.groupby("اسم العامل").agg({
-                    "الدقة (%)": "mean"
-                }).reset_index().sort_values("الدقة (%)", ascending=False).head(5)
-                
+                top_workers_data = filtered.groupby("اسم العامل").agg({"الدقة (%)": "mean"}).reset_index().sort_values("الدقة (%)", ascending=False).head(5)
                 top_workers = top_workers_data["اسم العامل"].tolist()
                 
                 fig_trend = go.Figure()
-                
                 colors = ['#00e5ff', '#ff4ecd', '#39ff14', '#ffb400', '#ff1744']
                 
                 for idx, worker in enumerate(top_workers):
@@ -856,7 +762,6 @@ def render_performance_section():
                 st.plotly_chart(fig_trend, use_container_width=True)
                 
                 st.markdown("---")
-                
                 st.markdown("### 🏭 متوسط الدقة حسب المخزن")
                 
                 by_wh = filtered.groupby("المخزن").agg({
@@ -870,11 +775,9 @@ def render_performance_section():
                 st.dataframe(by_wh, use_container_width=True, hide_index=True)
                 
                 st.markdown("---")
-                
                 st.markdown("### 📋 تفاصيل الأداء لكل عامل")
                 
                 selected_worker = st.selectbox("اختار عامل لعرض تفاصيله", workers_list, key="worker_details")
-                
                 worker_data = filtered[filtered["اسم العامل"].astype(str) == str(selected_worker)].copy()
                 
                 if worker_data.empty:
@@ -891,18 +794,17 @@ def render_performance_section():
                     
                     st.markdown(f"#### 📋 كل جردات {selected_worker}")
                     
-                    display_worker = worker_data[["التاريخ", "المخزن", "عدد الأصناف المجرودة", "عدد الأخطاء", "الدقة (%)"]].copy()
-                    display_worker["التاريخ"] = display_worker["التاريخ_dt"].dt.strftime("%Y-%m-%d")
+                    display_worker = worker_data.copy()
+                    display_worker["التاريخ_str"] = display_worker["التاريخ_dt"].dt.strftime("%Y-%m-%d")
+                    display_worker = display_worker[["التاريخ_str", "المخزن", "عدد الأصناف المجرودة", "عدد الأخطاء", "الدقة (%)"]].copy()
+                    display_worker.columns = ["التاريخ", "المخزن", "عدد الأصناف المجرودة", "عدد الأخطاء", "الدقة (%)"]
                     display_worker = display_worker.sort_values("التاريخ", ascending=False)
                     st.dataframe(display_worker, use_container_width=True, hide_index=True)
                     
-    # ==================== تبويب 4: الإعدادات ====================
     with tab4:
         st.subheader("⚙️ إعدادات قسم مؤشر الأداء")
         
-        # ==================== إعدادات التنبيهات ====================
         st.markdown("### 🔔 إعدادات التنبيهات")
-        
         settings = load_perf_settings()
         
         col1, col2 = st.columns(2)
@@ -931,8 +833,6 @@ def render_performance_section():
             st.rerun()
         
         st.markdown("---")
-        
-        # ==================== إدارة العمال ====================
         st.markdown("### 👥 إدارة العمال")
         
         col1, col2 = st.columns([3, 1])
@@ -966,8 +866,6 @@ def render_performance_section():
                     st.rerun()
         
         st.markdown("---")
-        
-        # ==================== إدارة المخازن ====================
         st.markdown("### 🏭 إدارة المخازن")
         
         col1, col2 = st.columns([3, 1])
@@ -1001,8 +899,6 @@ def render_performance_section():
                     st.rerun()
         
         st.markdown("---")
-        
-        # ==================== معلومات ====================
         st.markdown("### ℹ️ معلومات")
         
         col1, col2, col3 = st.columns(3)
@@ -1013,5 +909,4 @@ def render_performance_section():
             st.metric("👥 عدد العمال", len(load_perf_workers()))
         with col3:
             st.metric("🏭 عدد المخازن", len(load_perf_warehouses()))
-
-# ==================== نهاية القسم ====================
+                    
