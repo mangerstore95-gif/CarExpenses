@@ -10,9 +10,7 @@ from materials_edit import (
     load_issues,
     load_materials,
     load_warehouses,
-    load_materials_settings,
-    edit_batch_dialog,
-    delete_batch_dialog
+    load_materials_settings
 )
 
 # ==================== الملفات ====================
@@ -24,21 +22,9 @@ MATERIALS_SETTINGS_FILE = "materials_settings.xlsx"
 
 # ==================== البيانات الافتراضية ====================
 DEFAULT_MATERIALS = [
-    "EPS :GF-SA",
-    "EPS : H-MS",
-    "EPS : H-SA",
-    "EPS : E-SA",
-    "EPS : E-SB",
-    "EPS : H-S",
-    "EPS : H-SB",
-    "EPS R.200",
-    "EPS R.300",
-    "EPS R.400",
-    "EPS F 205",
-    "EPS F 105",
-    "EPS:B-103",
-    "EPS : EUROCELL 200RL",
-    "EPS : EUROCELL 150R",
+    "EPS :GF-SA", "EPS : H-MS", "EPS : H-SA", "EPS : E-SA", "EPS : E-SB",
+    "EPS : H-S", "EPS : H-SB", "EPS R.200", "EPS R.300", "EPS R.400",
+    "EPS F 205", "EPS F 105", "EPS:B-103", "EPS : EUROCELL 200RL", "EPS : EUROCELL 150R",
 ]
 
 DEFAULT_WAREHOUSES = ["مخزن صبحان", "مخزن الشويخ", "مخزن الوفرة", "مخزن العبدلي"]
@@ -52,10 +38,8 @@ DEFAULT_SETTINGS = {
 def init_materials_files():
     if not os.path.exists(MATERIALS_FILE):
         pd.DataFrame({"الصنف": DEFAULT_MATERIALS}).to_excel(MATERIALS_FILE, index=False)
-    
     if not os.path.exists(WAREHOUSES_FILE):
         pd.DataFrame({"المخزن": DEFAULT_WAREHOUSES}).to_excel(WAREHOUSES_FILE, index=False)
-    
     if not os.path.exists(BATCHES_FILE):
         df = pd.DataFrame(columns=[
             "رقم الدفعة", "الصنف", "المخزن", "تاريخ الإنتاج", "تاريخ الانتهاء",
@@ -63,14 +47,12 @@ def init_materials_files():
             "الكمية الكلية (كجم)", "الكمية المتبقية (كجم)", "ملاحظات"
         ])
         df.to_excel(BATCHES_FILE, index=False)
-    
     if not os.path.exists(ISSUES_FILE):
         df = pd.DataFrame(columns=[
             "رقم الصرف", "التاريخ", "رقم الدفعة", "الصنف", "المخزن",
             "الكمية المصروفة (كجم)", "الجهة/الطلب", "ملاحظات"
         ])
         df.to_excel(ISSUES_FILE, index=False)
-    
     if not os.path.exists(MATERIALS_SETTINGS_FILE):
         pd.DataFrame([DEFAULT_SETTINGS]).to_excel(MATERIALS_SETTINGS_FILE, index=False)
 
@@ -110,7 +92,6 @@ def get_expiry_status(expiry_date, warning_days=30, critical_days=7):
         exp = pd.to_datetime(expiry_date).date()
         today = date.today()
         days_left = (exp - today).days
-        
         if days_left < 0:
             return "منتهي", days_left, "🔴"
         elif days_left <= critical_days:
@@ -126,40 +107,31 @@ def get_total_stock_by_material():
     batches = load_batches()
     if batches.empty:
         return pd.DataFrame()
-    
     batches = get_batches_with_remaining(batches)
     batches = batches[batches["الكمية المتبقية (كجم)"] > 0]
-    
     total = batches.groupby("الصنف")["الكمية المتبقية (كجم)"].sum().reset_index()
     total.columns = ["الصنف", "الإجمالي (كجم)"]
-    total = total.sort_values("الإجمالي (كجم)", ascending=False)
-    return total
+    return total.sort_values("الإجمالي (كجم)", ascending=False)
 
 def get_stock_by_warehouse():
     batches = load_batches()
     if batches.empty:
         return pd.DataFrame()
-    
     batches = get_batches_with_remaining(batches)
     batches = batches[batches["الكمية المتبقية (كجم)"] > 0]
-    
     total = batches.groupby("المخزن")["الكمية المتبقية (كجم)"].sum().reset_index()
     total.columns = ["المخزن", "الإجمالي (كجم)"]
-    total = total.sort_values("الإجمالي (كجم)", ascending=False)
-    return total
+    return total.sort_values("الإجمالي (كجم)", ascending=False)
 
 def get_expiring_batches():
     batches = load_batches()
     if batches.empty:
         return pd.DataFrame()
-    
     settings = load_materials_settings()
     warning_days = int(settings.get("مدة التنبيه (يوم)", 30))
     critical_days = int(settings.get("مدة التحذير الأقصى (يوم)", 7))
-    
     batches = get_batches_with_remaining(batches)
     batches = batches[batches["الكمية المتبقية (كجم)"] > 0]
-    
     results = []
     for idx, row in batches.iterrows():
         status, days_left, icon = get_expiry_status(row["تاريخ الانتهاء"], warning_days, critical_days)
@@ -173,13 +145,162 @@ def get_expiring_batches():
                 "أيام متبقية": days_left,
                 "الكمية المتبقية (كجم)": row["الكمية المتبقية (كجم)"],
             })
-    
     if results:
         df = pd.DataFrame(results)
-        df = df.sort_values("أيام متبقية")
-        return df
+        return df.sort_values("أيام متبقية")
     return pd.DataFrame()
 
+# ==================== نافذة تعديل الدفعة ====================
+@st.dialog("✏️ تعديل دفعة", width="large")
+def edit_batch_dialog_local(batch_no):
+    batches = load_batches()
+    match = batches[batches["رقم الدفعة"].astype(str) == str(batch_no)]
+    
+    if match.empty:
+        st.error("⚠️ الدفعة مش موجودة")
+        if st.button("إغلاق"):
+            st.session_state["edit_batch"] = None
+            st.rerun()
+        return
+    
+    row = match.iloc[0]
+    materials_list = load_materials()
+    warehouses_list = load_warehouses()
+    issued_qty = get_issued_for_batch(batch_no)
+    
+    st.markdown(f"**رقم الدفعة:** `{batch_no}`")
+    st.info(f"📊 الكمية المصروفة من الدفعة دي: **{issued_qty:,.0f} كجم**")
+    st.markdown("---")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        current_mat = str(row["الصنف"])
+        mat_idx = materials_list.index(current_mat) if current_mat in materials_list else 0
+        new_mat = st.selectbox("🏷️ الصنف", materials_list, index=mat_idx, key="edit_batch_mat")
+        
+        current_wh = str(row["المخزن"])
+        wh_idx = warehouses_list.index(current_wh) if current_wh in warehouses_list else 0
+        new_wh = st.selectbox("🏭 المخزن", warehouses_list, index=wh_idx, key="edit_batch_wh")
+        
+        try:
+            current_prod = pd.to_datetime(row["تاريخ الإنتاج"]).date()
+        except:
+            current_prod = date.today()
+        new_prod = st.date_input("🏭 تاريخ الإنتاج", value=current_prod, key="edit_batch_prod")
+        
+        try:
+            current_exp = pd.to_datetime(row["تاريخ الانتهاء"]).date()
+        except:
+            current_exp = date.today()
+        new_exp = st.date_input("⏰ تاريخ الانتهاء", value=current_exp, key="edit_batch_exp")
+    
+    with col2:
+        try:
+            current_arr = pd.to_datetime(row["تاريخ الوصول"]).date()
+        except:
+            current_arr = date.today()
+        new_arr = st.date_input("📅 تاريخ الوصول", value=current_arr, key="edit_batch_arr")
+        
+        try:
+            current_weight = float(row["الوزن/عبوة (كجم)"])
+        except:
+            current_weight = 750.0
+        new_weight = st.number_input("⚖️ الوزن/عبوة (كجم)", min_value=0.0, step=10.0, value=current_weight, key="edit_batch_weight")
+        
+        try:
+            current_bags = int(row["عدد العبوات"])
+        except:
+            current_bags = 0
+        new_bags = st.number_input("📦 عدد العبوات", min_value=0, step=1, value=current_bags, key="edit_batch_bags")
+        
+        new_total = new_weight * new_bags
+        st.metric("📊 الكمية الكلية الجديدة", f"{new_total:,.0f} كجم")
+    
+    new_notes = st.text_area("📝 ملاحظات", value=str(row.get("ملاحظات", "")), key="edit_batch_notes")
+    
+    st.markdown("---")
+    
+    if new_total < issued_qty:
+        st.error(f"🚫 الكمية الجديدة ({new_total:,.0f}) أقل من المصروفة ({issued_qty:,.0f})!")
+    
+    col_save, col_cancel = st.columns(2)
+    
+    with col_save:
+        if st.button("💾 حفظ التعديلات", use_container_width=True, type="primary", key="save_edit_batch_btn"):
+            if new_total < issued_qty:
+                st.error("⚠️ الكمية الجديدة أقل من المصروفة")
+            else:
+                full_df = load_batches()
+                mask = full_df["رقم الدفعة"].astype(str) == str(batch_no)
+                idx = full_df[mask].index[0]
+                full_df.loc[idx, "الصنف"] = new_mat
+                full_df.loc[idx, "المخزن"] = new_wh
+                full_df.loc[idx, "تاريخ الإنتاج"] = str(new_prod)
+                full_df.loc[idx, "تاريخ الانتهاء"] = str(new_exp)
+                full_df.loc[idx, "تاريخ الوصول"] = str(new_arr)
+                full_df.loc[idx, "الوزن/عبوة (كجم)"] = new_weight
+                full_df.loc[idx, "عدد العبوات"] = new_bags
+                full_df.loc[idx, "الكمية الكلية (كجم)"] = new_total
+                full_df.loc[idx, "الكمية المتبقية (كجم)"] = new_total - issued_qty
+                full_df.loc[idx, "ملاحظات"] = new_notes.strip()
+                full_df.to_excel(BATCHES_FILE, index=False)
+                st.success(f"✅ تم تحديث الدفعة {batch_no}")
+                st.session_state["edit_batch"] = None
+                st.rerun()
+    
+    with col_cancel:
+        if st.button("❌ إلغاء", use_container_width=True, key="cancel_edit_batch_btn"):
+            st.session_state["edit_batch"] = None
+            st.rerun()
+
+# ==================== نافذة تأكيد حذف الدفعة ====================
+@st.dialog("🗑️ تأكيد الحذف")
+def delete_batch_dialog_local(batch_no):
+    batches = load_batches()
+    match = batches[batches["رقم الدفعة"].astype(str) == str(batch_no)]
+    
+    if match.empty:
+        st.error("⚠️ الدفعة مش موجودة")
+        if st.button("إغلاق"):
+            st.session_state["delete_batch"] = None
+            st.rerun()
+        return
+    
+    row = match.iloc[0]
+    issued_qty = get_issued_for_batch(batch_no)
+    
+    if issued_qty > 0:
+        st.error(f"🚫 **لا يمكن حذف هذه الدفعة!**")
+        st.warning(f"فيها **{issued_qty:,.0f} كجم** مصروفة. لازم تحذف سندات الصرف الأول.")
+        issues = load_issues()
+        related = issues[issues["رقم الدفعة"].astype(str) == str(batch_no)]
+        if not related.empty:
+            st.markdown("**سندات الصرف المرتبطة:**")
+            st.dataframe(related[["رقم الصرف", "التاريخ", "الكمية المصروفة (كجم)", "الجهة/الطلب"]], use_container_width=True, hide_index=True)
+        if st.button("إغلاق", use_container_width=True):
+            st.session_state["delete_batch"] = None
+            st.rerun()
+    else:
+        st.warning(f"⚠️ **هل أنت متأكد من حذف الدفعة** `{batch_no}` **؟**")
+        st.markdown(f"**الصنف:** {row['الصنف']}")
+        st.markdown(f"**المخزن:** {row['المخزن']}")
+        st.markdown(f"**الكمية الكلية:** {row['الكمية الكلية (كجم)']:,.0f} كجم")
+        st.markdown("**لا يمكن التراجع عن هذا الإجراء.**")
+        
+        col_yes, col_no = st.columns(2)
+        with col_yes:
+            if st.button("✅ نعم، احذف", type="primary", use_container_width=True, key="confirm_del_batch_btn"):
+                full_df = load_batches()
+                full_df = full_df[full_df["رقم الدفعة"].astype(str) != str(batch_no)]
+                full_df.to_excel(BATCHES_FILE, index=False)
+                st.success(f"✅ تم حذف الدفعة {batch_no}")
+                st.session_state["delete_batch"] = None
+                st.rerun()
+        with col_no:
+            if st.button("❌ إلغاء", use_container_width=True, key="cancel_del_batch_btn"):
+                st.session_state["delete_batch"] = None
+                st.rerun()
+                
 # ==================== دالة القسم الرئيسية ====================
 def render_materials_section():
     init_materials_files()
@@ -320,7 +441,7 @@ def render_materials_section():
             stock_wh = get_stock_by_warehouse()
             if not stock_wh.empty:
                 st.dataframe(stock_wh, use_container_width=True, hide_index=True)
-                
+    
     # ==================== تبويب 1: استلام مواد ====================
     with tab1:
         st.subheader("➕ استلام دفعة مواد خام جديدة")
@@ -329,11 +450,7 @@ def render_materials_section():
         if batches.empty:
             next_batch_num = "BATCH-0001"
         else:
-            try:
-                last_num = len(batches) + 1
-                next_batch_num = f"BATCH-{last_num:04d}"
-            except:
-                next_batch_num = f"BATCH-{len(batches)+1:04d}"
+            next_batch_num = f"BATCH-{len(batches)+1:04d}"
         
         col1, col2 = st.columns(2)
         
@@ -396,7 +513,7 @@ def render_materials_section():
                     save_batch(batch_data)
                     st.success(f"✅ تم حفظ الدفعة {batch_no} — {total_weight:,.0f} كجم")
                     st.balloons()
-    
+                    
     # ==================== تبويب 2: صرف مواد ====================
     with tab2:
         st.subheader("📤 صرف مواد خام من المخزون")
@@ -424,7 +541,7 @@ def render_materials_section():
                 with col2:
                     batch_options = []
                     for idx, row in available.iterrows():
-                        label = f"{row['رقم الدفعة']} | {row['الصنف']} | {row['المخزن']} | متبقي: {row['الكمية المتبقية (كجم)']:,.0f} كجم | ينتهي: {row['تاريخ الانتهاء']}"
+                        label = f"{row['رقم الدفعة']} | {row['الصنف']} | {row['المخزن']} | متبقي: {row['الكمية المتبقية (كجم)']:,.0f} كجم"
                         batch_options.append(label)
                     
                     selected_batch = st.selectbox("📦 اختار الدفعة *", ["-- اختر --"] + batch_options, key="mat_issue_batch")
@@ -482,10 +599,9 @@ def render_materials_section():
                             "ملاحظات": issue_notes.strip()
                         }
                         save_issue(issue_data)
-                        st.success(f"✅ تم صرف {issue_qty:,.0f} كجم من دفعة {selected_batch_row['رقم الدفعة']}")
+                        st.success(f"✅ تم صرف {issue_qty:,.0f} كجم")
                         st.balloons()
             
-            # سجل الصرف
             st.markdown("---")
             st.markdown("### 📋 سجل عمليات الصرف")
             
@@ -532,7 +648,7 @@ def render_materials_section():
                 col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 3])
                 
                 with col_btn1:
-                    if st.button("✏️ تعديل السند المحدد", use_container_width=True, type="primary"):
+                    if st.button("✏️ تعديل السند المحدد", use_container_width=True, type="primary", key="edit_issue_btn"):
                         selected = edited_issues[edited_issues["اختر"] == True]
                         if len(selected) == 0:
                             st.warning("⚠️ علّم على سند أولًا")
@@ -544,7 +660,7 @@ def render_materials_section():
                             st.rerun()
                 
                 with col_btn2:
-                    if st.button("🗑️ حذف السند المحدد", use_container_width=True):
+                    if st.button("🗑️ حذف السند المحدد", use_container_width=True, key="delete_issue_btn"):
                         selected = edited_issues[edited_issues["اختر"] == True]
                         if len(selected) == 0:
                             st.warning("⚠️ علّم على سند أولًا")
@@ -557,7 +673,7 @@ def render_materials_section():
                 
                 with col_btn3:
                     st.markdown(f"**إجمالي المصروف:** {df_issues['الكمية المصروفة (كجم)'].sum():,.0f} كجم من **{len(df_issues)}** سند")
-                    
+
     # ==================== تبويب 3: عرض المخزون ====================
     with tab3:
         st.subheader("📋 عرض المخزون الحالي")
@@ -650,27 +766,27 @@ def render_materials_section():
                 col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 3])
                 
                 with col_btn1:
-                    if st.button("✏️ تعديل المحدد", use_container_width=True, type="primary"):
+                    if st.button("✏️ تعديل المحدد", use_container_width=True, type="primary", key="edit_batch_btn"):
                         selected = edited_df[edited_df["اختر"] == True]
                         if len(selected) == 0:
                             st.warning("⚠️ علّم على دفعة أولًا")
                         elif len(selected) > 1:
                             st.error("⚠️ اختار دفعة واحدة بس")
                         else:
-                            batch_no = str(selected.iloc[0]["رقم الدفعة"])
-                            st.session_state["edit_batch"] = batch_no
+                            batch_no_sel = str(selected.iloc[0]["رقم الدفعة"])
+                            st.session_state["edit_batch"] = batch_no_sel
                             st.rerun()
                 
                 with col_btn2:
-                    if st.button("🗑️ حذف المحدد", use_container_width=True):
+                    if st.button("🗑️ حذف المحدد", use_container_width=True, key="delete_batch_btn"):
                         selected = edited_df[edited_df["اختر"] == True]
                         if len(selected) == 0:
                             st.warning("⚠️ علّم على دفعة أولًا")
                         elif len(selected) > 1:
                             st.error("⚠️ اختار دفعة واحدة بس")
                         else:
-                            batch_no = str(selected.iloc[0]["رقم الدفعة"])
-                            st.session_state["delete_batch"] = batch_no
+                            batch_no_sel = str(selected.iloc[0]["رقم الدفعة"])
+                            st.session_state["delete_batch"] = batch_no_sel
                             st.rerun()
                 
                 with col_btn3:
@@ -679,7 +795,7 @@ def render_materials_section():
                 total = filtered["الكمية المتبقية (كجم)"].sum()
                 st.markdown("---")
                 st.markdown(f"### 💰 إجمالي الرصيد المعروض: **{total:,.0f} كجم**")
-
+                
     # ==================== تبويب 4: التقارير ====================
     with tab4:
         st.subheader("📊 تقارير المواد الخام")
@@ -771,7 +887,7 @@ def render_materials_section():
                 key="settings_critical"
             )
         
-        if st.button("💾 حفظ إعدادات التنبيه", key="save_settings"):
+        if st.button("💾 حفظ إعدادات التنبيه", key="save_settings_btn"):
             new_settings = {
                 "مدة التنبيه (يوم)": new_warning,
                 "مدة التحذير الأقصى (يوم)": new_critical,
@@ -862,9 +978,9 @@ def render_materials_section():
         with col3:
             st.metric("📅 تاريخ اليوم", date.today().strftime("%Y-%m-%d"))
 
-# ==================== النوافذ المنبثقة ====================
+# ==================== النوافذ المنبثقة (في نفس الملف - دي الحل) ====================
 if st.session_state.get("edit_batch"):
-    edit_batch_dialog(st.session_state["edit_batch"])
+    edit_batch_dialog_local(st.session_state["edit_batch"])
 
 if st.session_state.get("delete_batch"):
-    delete_batch_dialog(st.session_state["delete_batch"])
+    delete_batch_dialog_local(st.session_state["delete_batch"])
