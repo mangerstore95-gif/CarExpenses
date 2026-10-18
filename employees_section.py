@@ -336,24 +336,33 @@ def render_delete_form_inline(record_id):
             
 # ==================== تبويب: لوحة التحكم (Dashboard) ====================
 def render_dashboard_tab():
-    st.subheader("📈 لوحة التحكم - نظرة شاملة")
+    st.subheader("📈 لوحة التحكم - تقييم الأداء")
     
     df = load_records()
     
     if df.empty:
-        st.info("📭 مفيش بيانات مسجلة لحد الآن")
+        st.info("📭 مفيش بيانات مسجلة لحد الآن. استخدم تبويب الإعدادات لإضافة بيانات تجريبية.")
         return
     
     df["التاريخ_dt"] = pd.to_datetime(df["التاريخ"], errors="coerce")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        min_date = df["التاريخ_dt"].min().date() if not df["التاريخ_dt"].isna().all() else date.today()
-        date_from = st.date_input("📅 من تاريخ", value=min_date, key="dash_date_from")
-    with col2:
-        max_date = df["التاريخ_dt"].max().date() if not df["التاريخ_dt"].isna().all() else date.today()
-        date_to = st.date_input("📅 إلى تاريخ", value=max_date, key="dash_date_to")
-    
+    # ==================== الفلاتر ====================
+    with st.expander("🔍 فلترة البيانات", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            min_date = df["التاريخ_dt"].min().date() if not df["التاريخ_dt"].isna().all() else date.today()
+            date_from = st.date_input("📅 من تاريخ", value=min_date, key="dash_date_from")
+        
+        with col2:
+            max_date = df["التاريخ_dt"].max().date() if not df["التاريخ_dt"].isna().all() else date.today()
+            date_to = st.date_input("📅 إلى تاريخ", value=max_date, key="dash_date_to")
+            
+        with col3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.info("💡 الفلاتر بتطبق على كل الأرقام والرسوم")
+
+    # تطبيق الفلاتر
     filtered = df[
         (df["التاريخ_dt"].dt.date >= date_from) &
         (df["التاريخ_dt"].dt.date <= date_to)
@@ -365,13 +374,10 @@ def render_dashboard_tab():
     
     st.markdown("---")
     
-    # ==================== KPI Cards ====================
+    # ==================== KPI Cards (الملخص العام) ====================
     total_events = len(filtered)
     total_employees = filtered["اسم الموظف"].nunique()
     total_event_types = filtered["الحدث"].nunique()
-    top_emp_series = filtered["اسم الموظف"].value_counts()
-    top_emp = top_emp_series.idxmax() if not top_emp_series.empty else "-"
-    top_emp_count = top_emp_series.max() if not top_emp_series.empty else 0
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -403,49 +409,104 @@ def render_dashboard_tab():
         """, unsafe_allow_html=True)
     
     with col4:
+        days_diff = (date_to - date_from).days
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); padding: 20px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 4px 15px rgba(250,112,154,0.4);">
-            <div style="font-size: 14px; opacity: 0.9;">🚨 الأعلى أحداثاً</div>
-            <div style="font-size: 18px; font-weight: bold; margin: 8px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{top_emp}</div>
-            <div style="font-size: 12px; opacity: 0.8;">{top_emp_count} حدث</div>
+        <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); padding: 20px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 4px 15px rgba(67,233,123,0.4);">
+            <div style="font-size: 14px; opacity: 0.9;">📅 مدة الفترة</div>
+            <div style="font-size: 32px; font-weight: bold; margin: 8px 0;">{days_diff}</div>
+            <div style="font-size: 12px; opacity: 0.8;">يوم</div>
         </div>
         """, unsafe_allow_html=True)
-    
+
     st.markdown("---")
     
+    # ==================== أفضل وأسوأ موظف ====================
+    st.markdown("### 🏆 تقييم الموظفين (الأفضل والأسوأ)")
+    
+    # حساب إحصائيات كل موظف
+    emp_stats = filtered.groupby("اسم الموظف").agg({
+        "رقم السند": "count",
+        "الرتبة": "first"
+    }).reset_index()
+    emp_stats.columns = ["الاسم", "عدد الأحداث", "الرتبة"]
+    
+    # ترتيب: الأقل أحداث = الأفضل، الأكثر = الأسوأ
+    emp_stats_sorted = emp_stats.sort_values("عدد الأحداث", ascending=True)
+    
+    if not emp_stats_sorted.empty:
+        best_emp = emp_stats_sorted.iloc[0]
+        worst_emp = emp_stats_sorted.iloc[-1]
+        
+        col1, col2 = st.columns(2)
+        
+        # أفضل موظف
+        with col1:
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); padding: 25px; border-radius: 15px; color: white; text-align: center; box-shadow: 0 8px 25px rgba(56,239,125,0.4);">
+                <div style="font-size: 50px;">🏅</div>
+                <div style="font-size: 16px; opacity: 0.9; margin-top: 10px;">⭐ أفضل موظف (الأقل أحداثاً)</div>
+                <div style="font-size: 26px; font-weight: bold; margin: 10px 0;">{best_emp['الاسم']}</div>
+                <div style="font-size: 14px; opacity: 0.9;">{best_emp['الرتبة']}</div>
+                <div style="font-size: 20px; font-weight: bold; margin-top: 10px; background: rgba(0,0,0,0.2); display: inline-block; padding: 5px 15px; border-radius: 20px;">
+                    {best_emp['عدد الأحداث']} أحداث فقط
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        # أسوأ موظف
+        with col2:
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #cb2d3e 0%, #ef473a 100%); padding: 25px; border-radius: 15px; color: white; text-align: center; box-shadow: 0 8px 25px rgba(239,71,58,0.4);">
+                <div style="font-size: 50px;">⚠️</div>
+                <div style="font-size: 16px; opacity: 0.9; margin-top: 10px;">🚨 يحتاج متابعة (الأكثر أحداثاً)</div>
+                <div style="font-size: 26px; font-weight: bold; margin: 10px 0;">{worst_emp['الاسم']}</div>
+                <div style="font-size: 14px; opacity: 0.9;">{worst_emp['الرتبة']}</div>
+                <div style="font-size: 20px; font-weight: bold; margin-top: 10px; background: rgba(0,0,0,0.2); display: inline-block; padding: 5px 15px; border-radius: 20px;">
+                    {worst_emp['عدد الأحداث']} أحداث
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
     # ==================== الرسوم البيانية ====================
     col1, col2 = st.columns(2)
     
+    # ---------- الرسم 1: توزيع الأحداث (Bar Chart بدل Pie) ----------
     with col1:
-        st.markdown("### 🥧 توزيع الأحداث")
+        st.markdown("### 📊 أنواع الأحداث (توزيع)")
         
         event_dist = filtered["الحدث"].value_counts().reset_index()
         event_dist.columns = ["الحدث", "العدد"]
         
         if not event_dist.empty:
-            fig_pie = go.Figure(go.Pie(
-                labels=event_dist["الحدث"],
-                values=event_dist["العدد"],
-                hole=0.4,
+            fig_event = go.Figure(go.Bar(
+                x=event_dist["العدد"],
+                y=event_dist["الحدث"],
+                orientation='h',
                 marker=dict(
-                    colors=['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#fee140', '#ff6b6b', '#30cfd0', '#ffb400', '#ff1744'],
-                    line=dict(color='white', width=2)
+                    color=event_dist["العدد"],
+                    colorscale=[[0, '#4facfe'], [1, '#f5576c']],
+                    showscale=False,
                 ),
-                textinfo='label+percent',
+                text=event_dist["العدد"],
                 textposition='outside',
                 textfont=dict(size=12, color='white'),
-                hovertemplate='<b>%{label}</b><br>العدد: %{value}<br>النسبة: %{percent}<extra></extra>'
+                hovertemplate='<b>%{y}</b><br>العدد: %{x}<extra></extra>'
             ))
-            fig_pie.update_layout(
-                height=450,
-                showlegend=False,
+            fig_event.update_layout(
+                height=400,
+                xaxis_title="عدد المرات",
+                yaxis_title="",
                 plot_bgcolor='rgba(10,10,25,0.6)',
                 paper_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='white', size=12),
-                margin=dict(l=40, r=40, t=20, b=20)
+                margin=dict(l=20, r=60, t=20, b=40),
+                yaxis=dict(autorange="reversed"),
             )
-            st.plotly_chart(fig_pie, use_container_width=True)
+            st.plotly_chart(fig_event, use_container_width=True)
     
+    # ---------- الرسم 2: تطور الأحداث شهرياً ----------
     with col2:
         st.markdown("### 📈 تطور الأحداث شهرياً")
         
@@ -467,7 +528,7 @@ def render_dashboard_tab():
                 hovertemplate='<b>%{x}</b><br>عدد الأحداث: %{y}<extra></extra>'
             ))
             fig_line.update_layout(
-                height=450,
+                height=400,
                 xaxis_title="الشهر",
                 yaxis_title="عدد الأحداث",
                 plot_bgcolor='rgba(10,10,25,0.6)',
@@ -478,53 +539,43 @@ def render_dashboard_tab():
                 yaxis=dict(gridcolor='rgba(0,229,255,0.1)', linecolor='rgba(0,229,255,0.3)')
             )
             st.plotly_chart(fig_line, use_container_width=True)
-    
+            
     st.markdown("---")
     
-    # ==================== أعلى 10 موظفين ====================
-    st.markdown("### 🏆 أعلى 10 موظفين في عدد الأحداث")
+    # ==================== جدول ترتيب الموظفين ====================
+    st.markdown("### 📋 جدول تقييم الموظفين (الترتيب الكامل)")
     
-    top10 = filtered["اسم الموظف"].value_counts().head(10).reset_index()
-    top10.columns = ["الاسم", "عدد الأحداث"]
-    top10["الرتبة"] = top10["الاسم"].apply(get_employee_rank)
+    # نضيف عمود التقييم
+    emp_stats_sorted["التقييم"] = emp_stats_sorted["عدد الأحداث"].apply(
+        lambda x: "✅ ممتاز" if x == 0 else ("🟢 جيد جداً" if x <= 2 else ("🟡 مقبول" if x <= 5 else "🔴 يحتاج متابعة"))
+    )
     
-    if not top10.empty:
-        fig_bar = go.Figure(go.Bar(
-            x=top10["عدد الأحداث"],
-            y=top10["الاسم"],
-            orientation='h',
-            marker=dict(
-                color=top10["عدد الأحداث"],
-                colorscale=[[0, '#ffb400'], [1, '#ff1744']],
-                showscale=False,
-            ),
-            text=top10["عدد الأحداث"],
-            textposition='outside',
-            textfont=dict(size=13, color='white'),
-            customdata=top10["الرتبة"],
-            hovertemplate='<b>%{y}</b><br>الرتبة: %{customdata}<br>عدد الأحداث: %{x}<extra></extra>'
-        ))
-        fig_bar.update_layout(
-            height=max(400, len(top10) * 45),
-            xaxis_title="عدد الأحداث",
-            yaxis_title="",
-            plot_bgcolor='rgba(10,10,25,0.6)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white', size=13),
-            margin=dict(l=20, r=60, t=20, b=40),
-            yaxis=dict(autorange="reversed"),
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
+    # نرتب تنازلياً للأكثر أحداثاً (الأسوأ أولاً) لو حابب، بس الأفضل نخليها تنازلياً بالأقل
+    display_emp_stats = emp_stats_sorted.copy()
+    display_emp_stats.insert(0, "الترتيب", range(1, len(display_emp_stats) + 1))
+    
+    st.dataframe(
+        display_emp_stats,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "الترتيب": st.column_config.NumberColumn("الترتيب", width="small"),
+            "الاسم": st.column_config.TextColumn("👤 الموظف", width="medium"),
+            "الرتبة": st.column_config.TextColumn("🏷️ الرتبة", width="medium"),
+            "عدد الأحداث": st.column_config.NumberColumn("📋 عدد الأحداث", width="small"),
+            "التقييم": st.column_config.TextColumn("⭐ التقييم", width="small"),
+        }
+    )
     
     st.markdown("---")
     
     # ==================== تحذيرات ذكية ====================
-    st.markdown("### 🚨 تنبيهات ذكية")
+    st.markdown("### 🚨 تنبيهات وإجراءات")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("#### ⚠️ موظفين تجاوزوا 5 أحداث")
+        st.markdown("#### ⚠️ موظفين يحتاجون متابعة (5 أحداث أو أكثر)")
         
         high_emp = filtered["اسم الموظف"].value_counts()
         high_emp = high_emp[high_emp >= 5]
@@ -542,7 +593,7 @@ def render_dashboard_tab():
                 """, unsafe_allow_html=True)
     
     with col2:
-        st.markdown("#### 🚨 أحداث حرجة")
+        st.markdown("#### 🚨 أحداث حرجة (سلوك غير لائق)")
         
         critical_events = [
             "التحدث باسلوب غير لائق مع زميله",
@@ -563,14 +614,53 @@ def render_dashboard_tab():
                     st.markdown(f"""
                     <div style="background: rgba(255,152,0,0.15); border-right: 4px solid #ff9800; padding: 10px; border-radius: 8px; margin-bottom: 6px;">
                         📋 <b>{ev}</b>
-                        <span style="float:left; color:#ff9800; font-weight:bold;">{count}</span>
+                        <span style="float:left; color:#ff9800; font-weight:bold;">{count} مرة</span>
                     </div>
                     """, unsafe_allow_html=True)
+
+    st.markdown("---")
+    
+    # ==================== الإجراءات المتخذة ====================
+    st.markdown("### ⚖️ الإجراءات المتخذة في الفترة")
+    
+    actions_dist = filtered["الإجراء المتخذ"].dropna().value_counts().reset_index()
+    actions_dist.columns = ["الإجراء", "عدد المرات"]
+    
+    if not actions_dist.empty:
+        # نفلتر عشان نخلي القيم الفاضية أو None
+        actions_dist = actions_dist[actions_dist["الإجراء"].astype(str) != "None"]
+        
+        if not actions_dist.empty:
+            fig_actions = go.Figure(go.Bar(
+                x=actions_dist["الإجراء"],
+                y=actions_dist["عدد المرات"],
+                marker=dict(
+                    color=actions_dist["عدد المرات"],
+                    colorscale=[[0, '#f093fb'], [1, '#667eea']],
+                    showscale=False,
+                ),
+                text=actions_dist["عدد المرات"],
+                textposition='outside',
+                textfont=dict(size=13, color='white'),
+                hovertemplate='<b>%{x}</b><br>عدد المرات: %{y}<extra></extra>'
+            ))
+            fig_actions.update_layout(
+                height=300,
+                xaxis_title="الإجراء",
+                yaxis_title="عدد المرات",
+                plot_bgcolor='rgba(10,10,25,0.6)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white', size=13),
+                margin=dict(l=40, r=40, t=20, b=60),
+                xaxis=dict(gridcolor='rgba(0,229,255,0.1)', linecolor='rgba(0,229,255,0.3)'),
+                yaxis=dict(gridcolor='rgba(0,229,255,0.1)', linecolor='rgba(0,229,255,0.3)')
+            )
+            st.plotly_chart(fig_actions, use_container_width=True)
     
     st.markdown("---")
     
-    # ==================== آخر 10 أحداث ====================
-    st.markdown("### 🕐 آخر 10 أحداث")
+    # ==================== آخر 10 أحداث (مع الإجراء والملاحظات) ====================
+    st.markdown("### 🕐 آخر 10 أحداث مسجلة")
     
     recent = filtered.sort_values("التاريخ_dt", ascending=False).head(10)
     
@@ -580,11 +670,28 @@ def render_dashboard_tab():
         for _, row in recent.iterrows():
             event = row["الحدث"]
             emp = row["اسم الموظف"]
+            rank = row.get("الرتبة", "-")
             dt = row["التاريخ_dt"].strftime("%Y-%m-%d") if pd.notna(row["التاريخ_dt"]) else "-"
             
+            action = row.get("الإجراء المتخذ", "-")
+            if pd.isna(action) or str(action).strip() == "":
+                action = "لا يوجد"
+            
+            notes = row.get("ملاحظات", "")
+            if pd.isna(notes) or str(notes).strip() == "":
+                notes = "لا يوجد"
+            
             st.markdown(f"""
-            <div style="background: rgba(20,20,40,0.6); border-right: 4px solid #00e5ff; padding: 12px; border-radius: 8px; margin-bottom: 6px;">
-                📅 <b>{dt}</b> | 👤 <b>{emp}</b> | 📋 {event}
+            <div style="background: rgba(20,20,40,0.6); border-right: 4px solid #00e5ff; padding: 14px; border-radius: 10px; margin-bottom: 8px;">
+                <div style="margin-bottom: 6px; font-size: 14px;">
+                    📅 <b>{dt}</b> &nbsp;|&nbsp; 👤 <b>{emp}</b> <span style="color:#888; font-size:12px;">({rank})</span> &nbsp;|&nbsp; 📋 <b>{event}</b>
+                </div>
+                <div style="font-size: 13px; color: #ddd;">
+                    ⚖️ <b style="color:#ffb400;">الإجراء المتخذ:</b> {action}
+                </div>
+                <div style="font-size: 13px; color: #aaa; margin-top: 4px;">
+                    📝 <b>ملاحظات:</b> {notes}
+                </div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -817,87 +924,6 @@ def render_search_tab():
     else:
         display_cols = ["رقم السند", "التاريخ", "الحدث", "ملاحظات", "الإجراء المتخذ"]
         st.dataframe(emp_records[display_cols], use_container_width=True, hide_index=True)
-        
-# ==================== تبويب: التقارير ====================
-def render_reports_tab():
-    st.subheader("📊 التقارير والإحصائيات")
-    df = load_records()
-    
-    if df.empty:
-        st.info("📭 مفيش بيانات للتقارير")
-        return
-    
-    df["التاريخ_dt"] = pd.to_datetime(df["التاريخ"], errors="coerce")
-    
-    st.markdown("### 📅 فلتر الفترة")
-    col1, col2 = st.columns(2)
-    with col1:
-        min_date = df["التاريخ_dt"].min().date() if not df["التاريخ_dt"].isna().all() else date.today()
-        date_from = st.date_input("من تاريخ", value=min_date, key="reports_date_from")
-    with col2:
-        max_date = df["التاريخ_dt"].max().date() if not df["التاريخ_dt"].isna().all() else date.today()
-        date_to = st.date_input("إلى تاريخ", value=max_date, key="reports_date_to")
-    
-    filtered = df[
-        (df["التاريخ_dt"].dt.date >= date_from) &
-        (df["التاريخ_dt"].dt.date <= date_to)
-    ]
-    
-    if filtered.empty:
-        st.warning("⚠️ مفيش بيانات في الفترة المحددة")
-        return
-    
-    st.markdown("---")
-    st.markdown("### 💡 ملخص الفترة")
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("📋 عدد السندات", len(filtered))
-    col2.metric("👥 عدد الموظفين", filtered["اسم الموظف"].nunique())
-    col3.metric("📋 عدد الأحداث", filtered["الحدث"].nunique())
-    col4.metric("📅 الفترة", f"{(date_to - date_from).days} يوم")
-    
-    st.markdown("---")
-    st.markdown("### 📊 إحصائيات الأحداث")
-    event_stats = get_event_stats(date_from, date_to)
-    
-    if not event_stats.empty:
-        fig = go.Figure(go.Bar(
-            x=event_stats["عدد المرات"],
-            y=event_stats["الحدث"],
-            orientation='h',
-            marker=dict(
-                color=event_stats["عدد المرات"],
-                colorscale=[[0, '#667eea'], [1, '#ff1744']],
-                showscale=False,
-            ),
-            text=event_stats["عدد المرات"],
-            textposition='outside',
-            textfont=dict(size=13, color='white'),
-            hovertemplate='<b>%{y}</b><br>عدد المرات: %{x}<extra></extra>'
-        ))
-        fig.update_layout(
-            height=max(400, len(event_stats) * 45),
-            xaxis_title="عدد المرات",
-            yaxis_title="",
-            plot_bgcolor='rgba(10,10,25,0.6)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white', size=13),
-            margin=dict(l=20, r=60, t=20, b=40),
-            yaxis=dict(autorange="reversed"),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    
-    st.markdown("---")
-    st.markdown("### 👥 إحصائيات الموظفين (الأكثر أحداث)")
-    emp_stats = get_all_employees_stats(date_from, date_to)
-    if not emp_stats.empty:
-        st.dataframe(emp_stats, use_container_width=True, hide_index=True)
-    
-    st.markdown("---")
-    st.markdown("### 🏷️ إحصائيات حسب الرتبة الوظيفية")
-    by_rank = filtered.groupby("الرتبة").size().reset_index(name="عدد الأحداث")
-    by_rank = by_rank.sort_values("عدد الأحداث", ascending=False)
-    if not by_rank.empty:
-        st.dataframe(by_rank, use_container_width=True, hide_index=True)
 
 # ==================== تبويب: الإعدادات ====================
 def render_settings_tab():
@@ -994,7 +1020,7 @@ def render_settings_tab():
     
     # ==================== بيانات تجريبية ====================
     st.markdown("### 🧪 بيانات تجريبية")
-    st.caption("زر لإضافة بيانات تجريبية عشان تجرب الداشبورد والتقارير")
+    st.caption("زر لإضافة بيانات تجريبية عشان تجرب لوحة التحكم والتقارير")
     
     col_demo1, col_demo2 = st.columns(2)
     
@@ -1035,12 +1061,11 @@ def render_employees_section():
     st.markdown("### متابعة سلوك وأداء الموظفين")
     st.markdown("---")
     
-    tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab0, tab1, tab2, tab3, tab4 = st.tabs([
         "📈 لوحة التحكم",
         "➕ إضافة سند",
         "📋 عرض السندات",
         "🔍 البحث عن موظف",
-        "📊 التقارير",
         "⚙️ الإعدادات"
     ])
     
@@ -1057,9 +1082,6 @@ def render_employees_section():
         render_search_tab()
     
     with tab4:
-        render_reports_tab()
-    
-    with tab5:
         render_settings_tab()
 
 # ==================== نهاية القسم ====================
