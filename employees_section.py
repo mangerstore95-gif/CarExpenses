@@ -1,33 +1,342 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
-from datetime import date
+from datetime import date, datetime, timedelta
 import os
+import random
+import plotly.graph_objects as go
 
-# ==================== إعدادات الملف والبيانات ====================
-DATA_FILE = "employees_data.csv"
+# ==================== الملفات ====================
+EMPLOYEES_FILE = "employees.xlsx"
+EVENTS_FILE = "employee_events.xlsx"
+RECORDS_FILE = "employee_records.xlsx"
+
+# ==================== البيانات الافتراضية ====================
+DEFAULT_DRIVERS = [
+    "مرزوق", "عبدالحميد", "شامير", "محمود", "ياسر", "منور", "أكرم", "حفصل", 
+    "عاطف", "على", "سيد", "عبده", "عبدالله", "خالد", "عبدالعظيم", "أسامة", "ثامر"
+]
+
+DEFAULT_WORKERS = [
+    {"الاسم": "احد", "الرتبة": "سوبر فايزر العمالة"},
+    {"الاسم": "سيف", "الرتبة": "نائب السوبر فايزر"},
+    {"الاسم": "دبيندرا", "الرتبة": "عامل من الدرجة أ"},
+    {"الاسم": "محمد قاسم على", "الرتبة": "عامل عادي"},
+    {"الاسم": "محمد سليمان", "الرتبة": "عامل عادي"},
+    {"الاسم": "نجيم مسلمانى", "الرتبة": "عامل عادي"},
+    {"الاسم": "ام دى سراج", "الرتبة": "عامل من الدرجة أ"},
+    {"الاسم": "عوض", "الرتبة": "عامل عادي"},
+    {"الاسم": "سيد منصور", "الرتبة": "عامل عادي"},
+    {"الاسم": "بابو", "الرتبة": "عامل عادي"},
+    {"الاسم": "جيما حسين", "الرتبة": "عامل من الدرجة أ"},
+    {"الاسم": "تافيجول", "الرتبة": "عامل عادي"},
+    {"الاسم": "سافروالدين", "الرتبة": "عامل عادي"},
+    {"الاسم": "جمساد مياه", "الرتبة": "عامل من الدرجة أ"},
+    {"الاسم": "اوشيما", "الرتبة": "عامل من الدرجة أ"},
+    {"الاسم": "احكم", "الرتبة": "عامل من الدرجة أ"},
+    {"الاسم": "ام دى ماهفوج", "الرتبة": "عامل عادي"},
+    {"الاسم": "نسيم خان", "الرتبة": "عامل عادي"},
+    {"الاسم": "ام دى اجيبول", "الرتبة": "عامل من الدرجة أ"},
+    {"الاسم": "ام دى بصير على", "الرتبة": "عامل عادي"},
+    {"الاسم": "شهادات حسين", "الرتبة": "عامل من الدرجة أ"},
+    {"الاسم": "صديق لطيف", "الرتبة": "عامل عادي"},
+    {"الاسم": "اجاى ساه", "الرتبة": "عامل عادي"},
+]
+
+DEFAULT_EVENTS = [
+    "مرضية", "غياب", "خروجيه",
+    "التحدث باسلوب غير لائق مع زميله",
+    "التحدث باسلوب غير لائق مع مسؤله",
+    "التحدث باسلوب غير لائق مع العميل",
+    "دعم سياره", "خطا تحميل",
+    "عدم الالتزام بالعمل", "اهمال فالسياره",
+]
+
+# ==================== دوال التهيئة ====================
+def init_employees_files():
+    if not os.path.exists(EMPLOYEES_FILE):
+        all_employees = []
+        for d in DEFAULT_DRIVERS:
+            all_employees.append({"الاسم": d, "الرتبة": "سائق"})
+        for w in DEFAULT_WORKERS:
+            all_employees.append({"الاسم": w["الاسم"], "الرتبة": w["الرتبة"]})
+        pd.DataFrame(all_employees).to_excel(EMPLOYEES_FILE, index=False)
+    
+    if not os.path.exists(EVENTS_FILE):
+        pd.DataFrame({"الحدث": DEFAULT_EVENTS}).to_excel(EVENTS_FILE, index=False)
+    
+    if not os.path.exists(RECORDS_FILE):
+        df = pd.DataFrame(columns=[
+            "رقم السند", "التاريخ", "اسم الموظف", "الرتبة", "الحدث", "ملاحظات", "الإجراء المتخذ"
+        ])
+        df.to_excel(RECORDS_FILE, index=False)
+
+# ==================== دوال التحميل ====================
+def load_employees():
+    try:
+        return pd.read_excel(EMPLOYEES_FILE)
+    except:
+        return pd.DataFrame()
+
+def load_events():
+    try:
+        df = pd.read_excel(EVENTS_FILE)
+        return df["الحدث"].dropna().astype(str).tolist()
+    except:
+        return DEFAULT_EVENTS
 
 def load_records():
-    """تحميل البيانات من ملف CSV"""
-    if os.path.exists(DATA_FILE):
-        try:
-            df = pd.read_csv(DATA_FILE)
-            expected_cols = ["التاريخ", "اسم الموظف", "الرتبة", "الحدث", "رقم السند"]
-            for col in expected_cols:
-                if col not in df.columns:
-                    df[col] = ""
-            return df
-        except Exception:
-            return pd.DataFrame(columns=["التاريخ", "اسم الموظف", "الرتبة", "الحدث", "رقم السند", "ملاحظات"])
-    return pd.DataFrame(columns=["التاريخ", "اسم الموظف", "الرتبة", "الحدث", "رقم السند", "ملاحظات"])
+    try:
+        return pd.read_excel(RECORDS_FILE)
+    except:
+        return pd.DataFrame()
+
+# ==================== دوال الحفظ ====================
+def save_employees(df):
+    df.to_excel(EMPLOYEES_FILE, index=False)
+
+def save_events(events):
+    pd.DataFrame({"الحدث": events}).to_excel(EVENTS_FILE, index=False)
 
 def save_records(df):
-    """حفظ البيانات في ملف CSV"""
-    df.to_csv(DATA_FILE, index=False, encoding="utf-8-sig")
+    df.to_excel(RECORDS_FILE, index=False)
 
-# ==================== تبويب: لوحة التحكم (Dashboard) - نسخة 3D ====================
+# ==================== دوال مساعدة ====================
+def get_next_record_id():
+    df = load_records()
+    if df.empty:
+        return "EMP-0001"
+    return f"EMP-{len(df)+1:04d}"
+
+def get_employee_rank(name):
+    df = load_employees()
+    if df.empty:
+        return ""
+    match = df[df["الاسم"].astype(str) == str(name)]
+    if not match.empty:
+        return str(match.iloc[0]["الرتبة"])
+    return ""
+
+def get_employee_records(emp_name, date_from=None, date_to=None):
+    df = load_records()
+    if df.empty:
+        return pd.DataFrame()
+    filtered = df[df["اسم الموظف"].astype(str) == str(emp_name)].copy()
+    if filtered.empty:
+        return pd.DataFrame()
+    if date_from is not None and date_to is not None:
+        filtered["التاريخ_dt"] = pd.to_datetime(filtered["التاريخ"], errors="coerce")
+        filtered = filtered[
+            (filtered["التاريخ_dt"].dt.date >= date_from) &
+            (filtered["التاريخ_dt"].dt.date <= date_to)
+        ]
+    return filtered
+
+def get_employee_stats(emp_name, date_from=None, date_to=None):
+    records = get_employee_records(emp_name, date_from, date_to)
+    if records.empty:
+        return {"count": 0, "events_breakdown": {}}
+    breakdown = records["الحدث"].value_counts().to_dict()
+    return {"count": len(records), "events_breakdown": breakdown}
+
+def get_all_employees_stats(date_from=None, date_to=None):
+    df = load_records()
+    employees = load_employees()
+    if df.empty or employees.empty:
+        return pd.DataFrame()
+    if date_from is not None and date_to is not None:
+        df["التاريخ_dt"] = pd.to_datetime(df["التاريخ"], errors="coerce")
+        df = df[
+            (df["التاريخ_dt"].dt.date >= date_from) &
+            (df["التاريخ_dt"].dt.date <= date_to)
+        ]
+    results = []
+    for _, emp in employees.iterrows():
+        name = str(emp["الاسم"])
+        rank = str(emp["الرتبة"])
+        emp_records = df[df["اسم الموظف"].astype(str) == name]
+        count = len(emp_records)
+        if count > 0:
+            results.append({"الاسم": name, "الرتبة": rank, "عدد الأحداث": count})
+    if results:
+        return pd.DataFrame(results).sort_values("عدد الأحداث", ascending=False)
+    return pd.DataFrame()
+
+def get_event_stats(date_from=None, date_to=None):
+    df = load_records()
+    if df.empty:
+        return pd.DataFrame()
+    if date_from is not None and date_to is not None:
+        df["التاريخ_dt"] = pd.to_datetime(df["التاريخ"], errors="coerce")
+        df = df[
+            (df["التاريخ_dt"].dt.date >= date_from) &
+            (df["التاريخ_dt"].dt.date <= date_to)
+        ]
+    if df.empty:
+        return pd.DataFrame()
+    counts = df["الحدث"].value_counts().reset_index()
+    counts.columns = ["الحدث", "عدد المرات"]
+    return counts.sort_values("عدد المرات", ascending=False)
+
+# ==================== دالة إضافة بيانات تجريبية ====================
+def add_demo_data():
+    employees_df = load_employees()
+    events_list = load_events()
+    
+    if employees_df.empty or not events_list:
+        return 0
+    
+    employee_names = employees_df["الاسم"].astype(str).tolist()
+    sample_employees = employee_names[:15] if len(employee_names) >= 15 else employee_names
+    
+    full_df = load_records()
+    added_count = 0
+    today = date.today()
+    
+    for i in range(60):
+        days_back = random.randint(0, 90)
+        record_date = today - timedelta(days=days_back)
+        emp = random.choice(sample_employees)
+        rank = get_employee_rank(emp)
+        
+        if random.random() < 0.4:
+            event = random.choice(["مرضية", "غياب", "خروجيه"])
+        else:
+            event = random.choice(events_list)
+        
+        notes = f"ملاحظة تجريبية رقم {i+1}"
+        actions = ["إنذار شفهي", "خصم يوم", "إنذار كتابي", "لا يوجد", "توجيه"]
+        action = random.choice(actions)
+        
+        new_id = f"DEMO-{i+1:04d}"
+        
+        if new_id in full_df["رقم السند"].astype(str).tolist():
+            continue
+        
+        new_row = {
+            "رقم السند": new_id,
+            "التاريخ": str(record_date),
+            "اسم الموظف": emp,
+            "الرتبة": rank,
+            "الحدث": event,
+            "ملاحظات": notes,
+            "الإجراء المتخذ": action,
+        }
+        
+        full_df = pd.concat([full_df, pd.DataFrame([new_row])], ignore_index=True)
+        added_count += 1
+    
+    save_records(full_df)
+    return added_count
+
+# ==================== فورم التعديل (تحت الجدول) ====================
+def render_edit_form_inline(record_id):
+    df = load_records()
+    match = df[df["رقم السند"].astype(str) == str(record_id)]
+    
+    if match.empty:
+        st.error("⚠️ السند مش موجود")
+        if st.button("❌ إغلاق", key="close_edit_inline_empty"):
+            st.session_state["edit_employee_record"] = None
+            st.rerun()
+        return
+    
+    row = match.iloc[0]
+    employees_df = load_employees()
+    events_list = load_events()
+    employee_names = employees_df["الاسم"].astype(str).tolist() if not employees_df.empty else []
+    
+    st.markdown(f"### ✏️ تعديل السند: `{record_id}`")
+    st.markdown("---")
+    
+    cur_date = row.get("التاريخ", str(date.today()))
+    try:
+        cur_date_parsed = pd.to_datetime(cur_date).date()
+    except:
+        cur_date_parsed = date.today()
+    
+    cur_emp = str(row.get("اسم الموظف", ""))
+    cur_event = str(row.get("الحدث", ""))
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        new_date = st.date_input("📅 التاريخ", value=cur_date_parsed, key=f"edit_date_inline_{record_id}")
+        emp_idx = employee_names.index(cur_emp) if cur_emp in employee_names else 0
+        new_emp = st.selectbox("👤 اسم الموظف", employee_names, index=emp_idx, key=f"edit_emp_inline_{record_id}")
+        rank = get_employee_rank(new_emp)
+        st.info(f"**الرتبة الوظيفية:** {rank}")
+    with col2:
+        ev_options = ["-- اختر --"] + events_list
+        ev_idx = ev_options.index(cur_event) if cur_event in ev_options else 0
+        new_event = st.selectbox("📋 الحدث", ev_options, index=ev_idx, key=f"edit_event_inline_{record_id}")
+    
+    new_notes = st.text_area("📝 ملاحظات", value=str(row.get("ملاحظات", "")), key=f"edit_notes_inline_{record_id}")
+    new_action = st.text_area("⚖️ الإجراء المتخذ", value=str(row.get("الإجراء المتخذ", "")), key=f"edit_action_inline_{record_id}")
+    
+    st.markdown("---")
+    col_save, col_cancel = st.columns(2)
+    
+    with col_save:
+        if st.button("💾 حفظ التعديلات", use_container_width=True, type="primary", key=f"save_inline_{record_id}"):
+            if new_event == "-- اختر --":
+                st.error("⚠️ الحدث مطلوب")
+            else:
+                full_df = load_records()
+                mask = full_df["رقم السند"].astype(str) == str(record_id)
+                idx = full_df[mask].index[0]
+                full_df.loc[idx, "التاريخ"] = str(new_date)
+                full_df.loc[idx, "اسم الموظف"] = new_emp
+                full_df.loc[idx, "الرتبة"] = rank
+                full_df.loc[idx, "الحدث"] = new_event
+                full_df.loc[idx, "ملاحظات"] = new_notes.strip()
+                full_df.loc[idx, "الإجراء المتخذ"] = new_action.strip()
+                save_records(full_df)
+                st.session_state["edit_employee_record"] = None
+                st.success(f"✅ تم تحديث السند {record_id}")
+                st.rerun()
+    
+    with col_cancel:
+        if st.button("❌ إلغاء", use_container_width=True, key=f"cancel_inline_{record_id}"):
+            st.session_state["edit_employee_record"] = None
+            st.rerun()
+
+# ==================== فورم الحذف (تحت الجدول) ====================
+def render_delete_form_inline(record_id):
+    df = load_records()
+    match = df[df["رقم السند"].astype(str) == str(record_id)]
+    
+    if match.empty:
+        st.error("⚠️ السند مش موجود")
+        if st.button("❌ إغلاق", key="close_del_inline_empty"):
+            st.session_state["delete_employee_record"] = None
+            st.rerun()
+        return
+    
+    row = match.iloc[0]
+    
+    st.markdown(f"### 🗑️ حذف السند: `{record_id}`")
+    st.warning(f"⚠️ **هل أنت متأكد من حذف السند** `{record_id}` **؟**")
+    st.markdown(f"**التاريخ:** {row.get('التاريخ', '-')}")
+    st.markdown(f"**الموظف:** {row.get('اسم الموظف', '-')}")
+    st.markdown(f"**الحدث:** {row.get('الحدث', '-')}")
+    st.markdown("**لا يمكن التراجع عن هذا الإجراء.**")
+    
+    col_yes, col_no = st.columns(2)
+    with col_yes:
+        if st.button("✅ نعم، احذف", type="primary", use_container_width=True, key=f"confirm_del_inline_{record_id}"):
+            full_df = load_records()
+            full_df = full_df[full_df["رقم السند"].astype(str) != str(record_id)]
+            save_records(full_df)
+            st.session_state["delete_employee_record"] = None
+            st.success(f"✅ تم حذف السند {record_id}")
+            st.rerun()
+    with col_no:
+        if st.button("❌ إلغاء", use_container_width=True, key=f"cancel_del_inline_{record_id}"):
+            st.session_state["delete_employee_record"] = None
+            st.rerun()
+            
+# ==================== تبويب: لوحة التحكم (Dashboard) ====================
 def render_dashboard_tab():
-    st.subheader("📈 لوحة التحكم - تقييم الأداء (عرض 3D)")
+    st.subheader("📈 لوحة التحكم - تقييم الأداء")
     
     df = load_records()
     
@@ -37,16 +346,23 @@ def render_dashboard_tab():
     
     df["التاريخ_dt"] = pd.to_datetime(df["التاريخ"], errors="coerce")
     
-    with st.container(border=True):
-        st.markdown("#### 🔍 فلترة البيانات")
-        col1, col2 = st.columns(2)
+    # ==================== الفلاتر ====================
+    with st.expander("🔍 فلترة البيانات", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        
         with col1:
             min_date = df["التاريخ_dt"].min().date() if not df["التاريخ_dt"].isna().all() else date.today()
-            date_from = st.date_input("📅 من تاريخ", value=min_date, key="dash_date_from_3d")
+            date_from = st.date_input("📅 من تاريخ", value=min_date, key="dash_date_from")
+        
         with col2:
             max_date = df["التاريخ_dt"].max().date() if not df["التاريخ_dt"].isna().all() else date.today()
-            date_to = st.date_input("📅 إلى تاريخ", value=max_date, key="dash_date_to_3d")
+            date_to = st.date_input("📅 إلى تاريخ", value=max_date, key="dash_date_to")
+            
+        with col3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.info("💡 الفلاتر بتطبق على كل الأرقام والرسوم")
 
+    # تطبيق الفلاتر
     filtered = df[
         (df["التاريخ_dt"].dt.date >= date_from) &
         (df["التاريخ_dt"].dt.date <= date_to)
@@ -56,433 +372,716 @@ def render_dashboard_tab():
         st.warning("⚠️ مفيش بيانات في الفترة المحددة")
         return
     
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("---")
     
+    # ==================== KPI Cards (الملخص العام) ====================
     total_events = len(filtered)
     total_employees = filtered["اسم الموظف"].nunique()
     total_event_types = filtered["الحدث"].nunique()
-    days_diff = (date_to - date_from).days
-    
-    glass_style = """
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 15px;
-    padding: 20px;
-    text-align: center;
-    color: white;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-    """
     
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.markdown(f"""
-        <div style="{glass_style}">
-            <div style="font-size: 14px; color: #a0a0a0;">📋 إجمالي الأحداث</div>
-            <div style="font-size: 36px; font-weight: bold; background: linear-gradient(90deg, #4facfe, #00f2fe); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{total_events}</div>
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 4px 15px rgba(102,126,234,0.4);">
+            <div style="font-size: 14px; opacity: 0.9;">📋 إجمالي الأحداث</div>
+            <div style="font-size: 32px; font-weight: bold; margin: 8px 0;">{total_events}</div>
+            <div style="font-size: 12px; opacity: 0.8;">خلال الفترة</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
         st.markdown(f"""
-        <div style="{glass_style}">
-            <div style="font-size: 14px; color: #a0a0a0;">👥 عدد الموظفين</div>
-            <div style="font-size: 36px; font-weight: bold; background: linear-gradient(90deg, #f093fb, #f5576c); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{total_employees}</div>
+        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 20px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 4px 15px rgba(245,87,108,0.4);">
+            <div style="font-size: 14px; opacity: 0.9;">👥 عدد الموظفين</div>
+            <div style="font-size: 32px; font-weight: bold; margin: 8px 0;">{total_employees}</div>
+            <div style="font-size: 12px; opacity: 0.8;">موظف مسجل</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
         st.markdown(f"""
-        <div style="{glass_style}">
-            <div style="font-size: 14px; color: #a0a0a0;">📋 أنواع الأحداث</div>
-            <div style="font-size: 36px; font-weight: bold; background: linear-gradient(90deg, #43e97b, #38f9d7); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{total_event_types}</div>
+        <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 20px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 4px 15px rgba(79,172,254,0.4);">
+            <div style="font-size: 14px; opacity: 0.9;">📋 أنواع الأحداث</div>
+            <div style="font-size: 32px; font-weight: bold; margin: 8px 0;">{total_event_types}</div>
+            <div style="font-size: 12px; opacity: 0.8;">نوع مختلف</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col4:
+        days_diff = (date_to - date_from).days
         st.markdown(f"""
-        <div style="{glass_style}">
-            <div style="font-size: 14px; color: #a0a0a0;">📅 مدة الفترة</div>
-            <div style="font-size: 36px; font-weight: bold; background: linear-gradient(90deg, #fa709a, #fee140); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{days_diff}</div>
+        <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); padding: 20px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 4px 15px rgba(67,233,123,0.4);">
+            <div style="font-size: 14px; opacity: 0.9;">📅 مدة الفترة</div>
+            <div style="font-size: 32px; font-weight: bold; margin: 8px 0;">{days_diff}</div>
+            <div style="font-size: 12px; opacity: 0.8;">يوم</div>
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("---")
+    
+    # ==================== أفضل وأسوأ موظف ====================
+    st.markdown("### 🏆 تقييم الموظفين (الأفضل والأسوأ)")
+    
+    # حساب إحصائيات كل موظف
+    emp_stats = filtered.groupby("اسم الموظف").agg({
+        "رقم السند": "count",
+        "الرتبة": "first"
+    }).reset_index()
+    emp_stats.columns = ["الاسم", "عدد الأحداث", "الرتبة"]
+    
+    # ترتيب: الأقل أحداث = الأفضل، الأكثر = الأسوأ
+    emp_stats_sorted = emp_stats.sort_values("عدد الأحداث", ascending=True)
+    
+    if not emp_stats_sorted.empty:
+        best_emp = emp_stats_sorted.iloc[0]
+        worst_emp = emp_stats_sorted.iloc[-1]
+        
+        col1, col2 = st.columns(2)
+        
+        # أفضل موظف
+        with col1:
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); padding: 25px; border-radius: 15px; color: white; text-align: center; box-shadow: 0 8px 25px rgba(56,239,125,0.4);">
+                <div style="font-size: 50px;">🏅</div>
+                <div style="font-size: 16px; opacity: 0.9; margin-top: 10px;">⭐ أفضل موظف (الأقل أحداثاً)</div>
+                <div style="font-size: 26px; font-weight: bold; margin: 10px 0;">{best_emp['الاسم']}</div>
+                <div style="font-size: 14px; opacity: 0.9;">{best_emp['الرتبة']}</div>
+                <div style="font-size: 20px; font-weight: bold; margin-top: 10px; background: rgba(0,0,0,0.2); display: inline-block; padding: 5px 15px; border-radius: 20px;">
+                    {best_emp['عدد الأحداث']} أحداث فقط
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        # أسوأ موظف
+        with col2:
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #cb2d3e 0%, #ef473a 100%); padding: 25px; border-radius: 15px; color: white; text-align: center; box-shadow: 0 8px 25px rgba(239,71,58,0.4);">
+                <div style="font-size: 50px;">⚠️</div>
+                <div style="font-size: 16px; opacity: 0.9; margin-top: 10px;">🚨 يحتاج متابعة (الأكثر أحداثاً)</div>
+                <div style="font-size: 26px; font-weight: bold; margin: 10px 0;">{worst_emp['الاسم']}</div>
+                <div style="font-size: 14px; opacity: 0.9;">{worst_emp['الرتبة']}</div>
+                <div style="font-size: 20px; font-weight: bold; margin-top: 10px; background: rgba(0,0,0,0.2); display: inline-block; padding: 5px 15px; border-radius: 20px;">
+                    {worst_emp['عدد الأحداث']} أحداث
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    with st.container(border=True):
-        st.markdown("### 🏆 تقييم الموظفين (الأفضل والأسوأ)")
+    st.markdown("---")
+
+    # ==================== الرسوم البيانية ====================
+    col1, col2 = st.columns(2)
+    
+    # ---------- الرسم 1: توزيع الأحداث (Bar Chart بدل Pie) ----------
+    with col1:
+        st.markdown("### 📊 أنواع الأحداث (توزيع)")
         
-        emp_stats = filtered.groupby("اسم الموظف").agg({
-            "رقم السند": "count",
-            "الرتبة": "first"
-        }).reset_index()
-        emp_stats.columns = ["الاسم", "عدد الأحداث", "الرتبة"]
+        event_dist = filtered["الحدث"].value_counts().reset_index()
+        event_dist.columns = ["الحدث", "العدد"]
         
-        emp_stats_sorted = emp_stats.sort_values("عدد الأحداث", ascending=True)
+        if not event_dist.empty:
+            fig_event = go.Figure(go.Bar(
+                x=event_dist["العدد"],
+                y=event_dist["الحدث"],
+                orientation='h',
+                marker=dict(
+                    color=event_dist["العدد"],
+                    colorscale=[[0, '#4facfe'], [1, '#f5576c']],
+                    showscale=False,
+                ),
+                text=event_dist["العدد"],
+                textposition='outside',
+                textfont=dict(size=12, color='white'),
+                hovertemplate='<b>%{y}</b><br>العدد: %{x}<extra></extra>'
+            ))
+            fig_event.update_layout(
+                height=400,
+                xaxis_title="عدد المرات",
+                yaxis_title="",
+                plot_bgcolor='rgba(10,10,25,0.6)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white', size=12),
+                margin=dict(l=20, r=60, t=20, b=40),
+                yaxis=dict(autorange="reversed"),
+            )
+            st.plotly_chart(fig_event, use_container_width=True)
+    
+    # ---------- الرسم 2: تطور الأحداث شهرياً ----------
+    with col2:
+        st.markdown("### 📈 تطور الأحداث شهرياً")
         
-        if not emp_stats_sorted.empty:
-            best_emp = emp_stats_sorted.iloc[0]
-            worst_emp = emp_stats_sorted.iloc[-1]
+        monthly = filtered.copy()
+        monthly["الشهر"] = monthly["التاريخ_dt"].dt.to_period("M").astype(str)
+        monthly_counts = monthly.groupby("الشهر").size().reset_index(name="عدد الأحداث")
+        monthly_counts = monthly_counts.sort_values("الشهر")
+        
+        if not monthly_counts.empty:
+            fig_line = go.Figure()
+            fig_line.add_trace(go.Scatter(
+                x=monthly_counts["الشهر"],
+                y=monthly_counts["عدد الأحداث"],
+                mode='lines+markers',
+                line=dict(color='#00e5ff', width=4, shape='spline'),
+                marker=dict(size=14, color='#ff4ecd', line=dict(color='#00e5ff', width=3)),
+                fill='tozeroy',
+                fillcolor='rgba(0,229,255,0.2)',
+                hovertemplate='<b>%{x}</b><br>عدد الأحداث: %{y}<extra></extra>'
+            ))
+            fig_line.update_layout(
+                height=400,
+                xaxis_title="الشهر",
+                yaxis_title="عدد الأحداث",
+                plot_bgcolor='rgba(10,10,25,0.6)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white', size=13),
+                margin=dict(l=40, r=40, t=20, b=40),
+                xaxis=dict(gridcolor='rgba(0,229,255,0.1)', linecolor='rgba(0,229,255,0.3)'),
+                yaxis=dict(gridcolor='rgba(0,229,255,0.1)', linecolor='rgba(0,229,255,0.3)')
+            )
+            st.plotly_chart(fig_line, use_container_width=True)
             
-            col1, col2 = st.columns(2)
-            
-            with col1:
+    st.markdown("---")
+    
+    # ==================== جدول ترتيب الموظفين ====================
+    st.markdown("### 📋 جدول تقييم الموظفين (الترتيب الكامل)")
+    
+    # نضيف عمود التقييم
+    emp_stats_sorted["التقييم"] = emp_stats_sorted["عدد الأحداث"].apply(
+        lambda x: "✅ ممتاز" if x == 0 else ("🟢 جيد جداً" if x <= 2 else ("🟡 مقبول" if x <= 5 else "🔴 يحتاج متابعة"))
+    )
+    
+    # نرتب تنازلياً للأكثر أحداثاً (الأسوأ أولاً) لو حابب، بس الأفضل نخليها تنازلياً بالأقل
+    display_emp_stats = emp_stats_sorted.copy()
+    display_emp_stats.insert(0, "الترتيب", range(1, len(display_emp_stats) + 1))
+    
+    st.dataframe(
+        display_emp_stats,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "الترتيب": st.column_config.NumberColumn("الترتيب", width="small"),
+            "الاسم": st.column_config.TextColumn("👤 الموظف", width="medium"),
+            "الرتبة": st.column_config.TextColumn("🏷️ الرتبة", width="medium"),
+            "عدد الأحداث": st.column_config.NumberColumn("📋 عدد الأحداث", width="small"),
+            "التقييم": st.column_config.TextColumn("⭐ التقييم", width="small"),
+        }
+    )
+    
+    st.markdown("---")
+    
+    # ==================== تحذيرات ذكية ====================
+    st.markdown("### 🚨 تنبيهات وإجراءات")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### ⚠️ موظفين يحتاجون متابعة (5 أحداث أو أكثر)")
+        
+        high_emp = filtered["اسم الموظف"].value_counts()
+        high_emp = high_emp[high_emp >= 5]
+        
+        if high_emp.empty:
+            st.success("✅ مفيش موظفين تجاوزوا 5 أحداث")
+        else:
+            for emp, cnt in high_emp.items():
+                rank = get_employee_rank(emp)
                 st.markdown(f"""
-                <div style="background: rgba(17, 153, 142, 0.2); border: 1px solid #11998e; padding: 20px; border-radius: 15px; color: white; text-align: center; box-shadow: 0 0 20px rgba(17, 153, 142, 0.3);">
-                    <div style="font-size: 40px;">🏅</div>
-                    <div style="font-size: 16px; color: #38ef7d; margin-top: 5px;">⭐ أفضل موظف</div>
-                    <div style="font-size: 24px; font-weight: bold; margin: 10px 0;">{best_emp['الاسم']}</div>
-                    <div style="font-size: 14px; color: #a0a0a0;">{best_emp['الرتبة']}</div>
-                    <div style="font-size: 18px; font-weight: bold; margin-top: 10px; background: #11998e; display: inline-block; padding: 5px 15px; border-radius: 20px;">
-                        {best_emp['عدد الأحداث']} أحداث
-                    </div>
+                <div style="background: rgba(255,23,68,0.15); border-right: 4px solid #ff1744; padding: 10px; border-radius: 8px; margin-bottom: 6px;">
+                    👤 <b>{emp}</b> <span style="color:#aaa; font-size:12px;">({rank})</span>
+                    <span style="float:left; color:#ff1744; font-weight:bold;">{cnt} حدث</span>
                 </div>
                 """, unsafe_allow_html=True)
-                
-            with col2:
-                st.markdown(f"""
-                <div style="background: rgba(203, 45, 62, 0.2); border: 1px solid #cb2d3e; padding: 20px; border-radius: 15px; color: white; text-align: center; box-shadow: 0 0 20px rgba(203, 45, 62, 0.3);">
-                    <div style="font-size: 40px;">⚠️</div>
-                    <div style="font-size: 16px; color: #ef473a; margin-top: 5px;">🚨 يحتاج متابعة</div>
-                    <div style="font-size: 24px; font-weight: bold; margin: 10px 0;">{worst_emp['الاسم']}</div>
-                    <div style="font-size: 14px; color: #a0a0a0;">{worst_emp['الرتبة']}</div>
-                    <div style="font-size: 18px; font-weight: bold; margin-top: 10px; background: #cb2d3e; display: inline-block; padding: 5px 15px; border-radius: 20px;">
-                        {worst_emp['عدد الأحداث']} أحداث
+    
+    with col2:
+        st.markdown("#### 🚨 أحداث حرجة (سلوك غير لائق)")
+        
+        critical_events = [
+            "التحدث باسلوب غير لائق مع زميله",
+            "التحدث باسلوب غير لائق مع مسؤله",
+            "التحدث باسلوب غير لائق مع العميل",
+        ]
+        
+        critical_data = filtered[filtered["الحدث"].isin(critical_events)]
+        
+        if critical_data.empty:
+            st.success("✅ مفيش أحداث حرجة")
+        else:
+            st.error(f"⚠️ **{len(critical_data)} حدث حرج** خلال الفترة")
+            
+            for ev in critical_events:
+                count = len(critical_data[critical_data["الحدث"] == ev])
+                if count > 0:
+                    st.markdown(f"""
+                    <div style="background: rgba(255,152,0,0.15); border-right: 4px solid #ff9800; padding: 10px; border-radius: 8px; margin-bottom: 6px;">
+                        📋 <b>{ev}</b>
+                        <span style="float:left; color:#ff9800; font-weight:bold;">{count} مرة</span>
                     </div>
+                    """, unsafe_allow_html=True)
+
+    st.markdown("---")
+    
+    # ==================== الإجراءات المتخذة ====================
+    st.markdown("### ⚖️ الإجراءات المتخذة في الفترة")
+    
+    actions_dist = filtered["الإجراء المتخذ"].dropna().value_counts().reset_index()
+    actions_dist.columns = ["الإجراء", "عدد المرات"]
+    
+    if not actions_dist.empty:
+        # نفلتر عشان نخلي القيم الفاضية أو None
+        actions_dist = actions_dist[actions_dist["الإجراء"].astype(str) != "None"]
+        
+        if not actions_dist.empty:
+            fig_actions = go.Figure(go.Bar(
+                x=actions_dist["الإجراء"],
+                y=actions_dist["عدد المرات"],
+                marker=dict(
+                    color=actions_dist["عدد المرات"],
+                    colorscale=[[0, '#f093fb'], [1, '#667eea']],
+                    showscale=False,
+                ),
+                text=actions_dist["عدد المرات"],
+                textposition='outside',
+                textfont=dict(size=13, color='white'),
+                hovertemplate='<b>%{x}</b><br>عدد المرات: %{y}<extra></extra>'
+            ))
+            fig_actions.update_layout(
+                height=300,
+                xaxis_title="الإجراء",
+                yaxis_title="عدد المرات",
+                plot_bgcolor='rgba(10,10,25,0.6)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white', size=13),
+                margin=dict(l=40, r=40, t=20, b=60),
+                xaxis=dict(gridcolor='rgba(0,229,255,0.1)', linecolor='rgba(0,229,255,0.3)'),
+                yaxis=dict(gridcolor='rgba(0,229,255,0.1)', linecolor='rgba(0,229,255,0.3)')
+            )
+            st.plotly_chart(fig_actions, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # ==================== آخر 10 أحداث (مع الإجراء والملاحظات) ====================
+    st.markdown("### 🕐 آخر 10 أحداث مسجلة")
+    
+    recent = filtered.sort_values("التاريخ_dt", ascending=False).head(10)
+    
+    if recent.empty:
+        st.info("📭 مفيش أحداث")
+    else:
+        for _, row in recent.iterrows():
+            event = row["الحدث"]
+            emp = row["اسم الموظف"]
+            rank = row.get("الرتبة", "-")
+            dt = row["التاريخ_dt"].strftime("%Y-%m-%d") if pd.notna(row["التاريخ_dt"]) else "-"
+            
+            action = row.get("الإجراء المتخذ", "-")
+            if pd.isna(action) or str(action).strip() == "":
+                action = "لا يوجد"
+            
+            notes = row.get("ملاحظات", "")
+            if pd.isna(notes) or str(notes).strip() == "":
+                notes = "لا يوجد"
+            
+            st.markdown(f"""
+            <div style="background: rgba(20,20,40,0.6); border-right: 4px solid #00e5ff; padding: 14px; border-radius: 10px; margin-bottom: 8px;">
+                <div style="margin-bottom: 6px; font-size: 14px;">
+                    📅 <b>{dt}</b> &nbsp;|&nbsp; 👤 <b>{emp}</b> <span style="color:#888; font-size:12px;">({rank})</span> &nbsp;|&nbsp; 📋 <b>{event}</b>
                 </div>
-                """, unsafe_allow_html=True)
-
-    st.markdown("<br><br>", unsafe_allow_html=True)
-
-    col_chart1, col_chart2 = st.columns(2)
+                <div style="font-size: 13px; color: #ddd;">
+                    ⚖️ <b style="color:#ffb400;">الإجراء المتخذ:</b> {action}
+                </div>
+                <div style="font-size: 13px; color: #aaa; margin-top: 4px;">
+                    📝 <b>ملاحظات:</b> {notes}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+# ==================== تبويب: إضافة سند ====================
+def render_add_record_tab():
+    st.subheader("➕ إضافة سند جديد")
+    employees_df = load_employees()
+    events_list = load_events()
     
-    with col_chart1:
-        with st.container(border=True):
-            st.markdown("### 📊 أنواع الأحداث (3D)")
-            
-            event_dist = filtered["الحدث"].value_counts().reset_index()
-            event_dist.columns = ["الحدث", "العدد"]
-            
-            if not event_dist.empty:
-                fig_event = go.Figure(data=[
-                    go.Bar(
-                        x=event_dist["الحدث"],
-                        y=event_dist["العدد"],
-                        z=[1] * len(event_dist),
-                        marker=dict(
-                            color=event_dist["العدد"],
-                            colorscale=[[0, '#00f2fe'], [1, '#4facfe']],
-                            showscale=False,
-                        ),
-                        text=event_dist["العدد"],
-                        textposition='auto',
-                    )
-                ])
-                fig_event.update_layout(
-                    scene=dict(
-                        xaxis_title="الحدث",
-                        yaxis_title="العدد",
-                        zaxis_title="",
-                        xaxis=dict(backgroundcolor="rgba(0,0,0,0)", gridcolor="rgba(255,255,255,0.1)"),
-                        yaxis=dict(backgroundcolor="rgba(0,0,0,0)", gridcolor="rgba(255,255,255,0.1)"),
-                        zaxis=dict(backgroundcolor="rgba(0,0,0,0)", gridcolor="rgba(255,255,255,0.1)"),
-                    ),
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='white'),
-                    height=400,
-                    margin=dict(l=0, r=0, t=0, b=0)
-                )
-                st.plotly_chart(fig_event, use_container_width=True)
-
-    with col_chart2:
-        with st.container(border=True):
-            st.markdown("### 📈 تطور الأحداث شهرياً (3D)")
-            
-            monthly = filtered.copy()
-            monthly["الشهر"] = monthly["التاريخ_dt"].dt.to_period("M").astype(str)
-            monthly_counts = monthly.groupby("الشهر").size().reset_index(name="عدد الأحداث")
-            monthly_counts = monthly_counts.sort_values("الشهر")
-            
-            if not monthly_counts.empty:
-                x_vals = list(range(len(monthly_counts)))
-                y_vals = [1] * len(monthly_counts)
-                z_vals = monthly_counts["عدد الأحداث"].tolist()
-                
-                fig_line = go.Figure(data=[go.Scatter3d(
-                    x=x_vals,
-                    y=y_vals,
-                    z=z_vals,
-                    mode='lines+markers',
-                    line=dict(color='#ff4ecd', width=8),
-                    marker=dict(size=8, color='#00e5ff', line=dict(color='white', width=1)),
-                )])
-                
-                fig_line.update_layout(
-                    scene=dict(
-                        xaxis=dict(
-                            tickvals=x_vals,
-                            ticktext=monthly_counts["الشهر"].tolist(),
-                            title="الشهر",
-                            backgroundcolor="rgba(0,0,0,0)", gridcolor="rgba(255,255,255,0.1)"
-                        ),
-                        yaxis=dict(
-                            title="",
-                            showticklabels=False,
-                            backgroundcolor="rgba(0,0,0,0)", gridcolor="rgba(255,255,255,0.1)"
-                        ),
-                        zaxis=dict(
-                            title="عدد الأحداث",
-                            backgroundcolor="rgba(0,0,0,0)", gridcolor="rgba(255,255,255,0.1)"
-                        ),
-                    ),
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='white'),
-                    height=400,
-                    margin=dict(l=0, r=0, t=0, b=0)
-                )
-                st.plotly_chart(fig_line, use_container_width=True)
-
-
-# ==================== تبويب: جدول الترتيب والتحذيرات ====================
-def render_ranking_tab():
-    st.subheader("🏆 جدول الترتيب والتحذيرات")
+    if employees_df.empty:
+        st.warning("⚠️ مفيش موظفين مسجلين. روح للإعدادات ضيف موظفين الأول")
+        return
     
+    employee_names = employees_df["الاسم"].astype(str).tolist()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        record_date = st.date_input("📅 التاريخ *", value=date.today(), key="new_emp_record_date")
+        selected_emp = st.selectbox("👤 اسم الموظف *", ["-- اختر --"] + employee_names, key="new_emp_record_employee")
+        if selected_emp != "-- اختر --":
+            rank = get_employee_rank(selected_emp)
+            st.info(f"**الرتبة الوظيفية:** {rank}")
+    with col2:
+        selected_event = st.selectbox("📋 الحدث *", ["-- اختر --"] + events_list, key="new_emp_record_event")
+    
+    notes = st.text_area("📝 ملاحظات", placeholder="أي تفاصيل إضافية", key="new_emp_record_notes")
+    action = st.text_area("⚖️ الإجراء المتخذ", placeholder="مثال: إنذار شفهي، خصم يوم...", key="new_emp_record_action")
+    
+    st.markdown("---")
+    submitted = st.button("💾 حفظ السند", use_container_width=True, type="primary", key="save_new_emp_record")
+    
+    if submitted:
+        errors = []
+        if selected_emp == "-- اختر --": errors.append("الموظف مطلوب")
+        if selected_event == "-- اختر --": errors.append("الحدث مطلوب")
+        
+        if errors:
+            for err in errors:
+                st.error(f"⚠️ {err}")
+        else:
+            rank = get_employee_rank(selected_emp)
+            new_id = get_next_record_id()
+            new_row = {
+                "رقم السند": new_id,
+                "التاريخ": str(record_date),
+                "اسم الموظف": selected_emp,
+                "الرتبة": rank,
+                "الحدث": selected_event,
+                "ملاحظات": notes.strip(),
+                "الإجراء المتخذ": action.strip(),
+            }
+            full_df = load_records()
+            full_df = pd.concat([full_df, pd.DataFrame([new_row])], ignore_index=True)
+            save_records(full_df)
+            st.success(f"✅ تم حفظ السند **{new_id}** — {selected_emp} — {selected_event}")
+            st.balloons()
+            st.rerun()
+
+# ==================== تبويب: عرض السندات ====================
+def render_records_tab():
+    st.subheader("📋 كل السندات المسجلة")
     df = load_records()
     
     if df.empty:
-        st.info("📭 مفيش بيانات مسجلة لحد الآن.")
+        st.info("📭 مفيش سندات مسجلة لحد الآن")
         return
     
     df["التاريخ_dt"] = pd.to_datetime(df["التاريخ"], errors="coerce")
+    employees_df = load_employees()
+    employee_names = employees_df["الاسم"].astype(str).tolist() if not employees_df.empty else []
+    events_list = load_events()
     
-    with st.container(border=True):
-        st.markdown("#### 🔍 فلترة الفترة")
-        col1, col2 = st.columns(2)
-        with col1:
-            min_date = df["التاريخ_dt"].min().date() if not df["التاريخ_dt"].isna().all() else date.today()
-            date_from = st.date_input("📅 من تاريخ", value=min_date, key="rank_date_from")
-        with col2:
-            max_date = df["التاريخ_dt"].max().date() if not df["التاريخ_dt"].isna().all() else date.today()
-            date_to = st.date_input("📅 إلى تاريخ", value=max_date, key="rank_date_to")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        min_date = df["التاريخ_dt"].min().date() if not df["التاريخ_dt"].isna().all() else date.today()
+        date_from = st.date_input("📅 من تاريخ", value=min_date, key="emp_records_date_from")
+    with col2:
+        max_date = df["التاريخ_dt"].max().date() if not df["التاريخ_dt"].isna().all() else date.today()
+        date_to = st.date_input("📅 إلى تاريخ", value=max_date, key="emp_records_date_to")
+    with col3:
+        filter_emp = st.selectbox("👤 الموظف", ["الكل"] + employee_names, key="emp_records_filter_emp")
+    with col4:
+        filter_event = st.selectbox("📋 الحدث", ["الكل"] + events_list, key="emp_records_filter_event")
     
-    filtered = df[
-        (df["التاريخ_dt"].dt.date >= date_from) &
-        (df["التاريخ_dt"].dt.date <= date_to)
-    ].copy()
+    filtered = df.copy()
+    filtered = filtered[
+        (filtered["التاريخ_dt"].dt.date >= date_from) & 
+        (filtered["التاريخ_dt"].dt.date <= date_to)
+    ]
+    if filter_emp != "الكل":
+        filtered = filtered[filtered["اسم الموظف"].astype(str) == filter_emp]
+    if filter_event != "الكل":
+        filtered = filtered[filtered["الحدث"].astype(str) == filter_event]
     
-    if filtered.empty:
-        st.warning("⚠️ مفيش بيانات في الفترة المحددة")
-        return
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    with st.container(border=True):
-        st.markdown("### 📋 ترتيب الموظفين حسب عدد الأحداث")
-        
-        ranking = filtered.groupby("اسم الموظف").agg({
-            "رقم السند": "count",
-            "الرتبة": "first"
-        }).reset_index()
-        ranking.columns = ["الاسم", "عدد الأحداث", "الرتبة"]
-        ranking = ranking.sort_values("عدد الأحداث", ascending=True).reset_index(drop=True)
-        ranking.index = ranking.index + 1
-        ranking.index.name = "الترتيب"
-        
-        st.dataframe(ranking, use_container_width=True, height=min(500, 50 + len(ranking) * 38))
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        fig_rank = go.Figure(go.Bar(
-            x=ranking["عدد الأحداث"],
-            y=ranking["الاسم"],
-            orientation='h',
-            marker=dict(
-                color=ranking["عدد الأحداث"],
-                colorscale=[[0, '#38ef7d'], [0.5, '#f093fb'], [1, '#ef473a']],
-                showscale=False,
-            ),
-            text=ranking["عدد الأحداث"],
-            textposition='outside',
-            textfont=dict(size=13, color='white'),
-        ))
-        fig_rank.update_layout(
-            height=max(350, len(ranking) * 45),
-            xaxis_title="عدد الأحداث",
-            yaxis_title="",
-            plot_bgcolor='rgba(10,10,25,0.6)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white', size=13),
-            margin=dict(l=40, r=80, t=20, b=40),
-            yaxis=dict(autorange="reversed"),
-        )
-        st.plotly_chart(fig_rank, use_container_width=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    with st.container(border=True):
-        st.markdown("### 🚨 التحذيرات (الموظفون اللي يحتاجون متابعة)")
-        
-        threshold = ranking["عدد الأحداث"].mean() + ranking["عدد الأحداث"].std()
-        if pd.isna(threshold):
-            threshold = ranking["عدد الأحداث"].mean()
-        
-        warned = ranking[ranking["عدد الأحداث"] >= threshold].sort_values("عدد الأحداث", ascending=False)
-        
-        if warned.empty:
-            st.success("✅ مفيش موظفين تجاوزوا حد التحذير في الفترة دي. كل حاجة تمام!")
-        else:
-            st.markdown(f"<div style='color:#ff6b6b; font-size:14px; margin-bottom:10px;'>⚠️ حد التحذير: {threshold:.1f} حدث</div>", unsafe_allow_html=True)
-            
-            for _, row in warned.iterrows():
-                st.markdown(f"""
-                <div style="background: linear-gradient(135deg, rgba(203,45,62,0.85) 0%, rgba(239,71,58,0.85) 100%); padding: 15px 20px; border-radius: 12px; color: white; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(239,71,58,0.3);">
-                    <div>
-                        <div style="font-size: 18px; font-weight: bold;">⚠️ {row['الاسم']}</div>
-                        <div style="font-size: 13px; opacity: 0.9;">{row['الرتبة']}</div>
-                    </div>
-                    <div style="font-size: 22px; font-weight: bold; background: rgba(0,0,0,0.25); padding: 8px 18px; border-radius: 20px;">
-                        {row['عدد الأحداث']} حدث
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    with st.container(border=True):
-        st.markdown("### 📝 الإجراءات المقترحة")
-        
-        if warned.empty:
-            st.info("مفيش إجراءات مطلوبة حالياً.")
-        else:
-            for _, row in warned.iterrows():
-                count = row['عدد الأحداث']
-                if count >= threshold * 1.5:
-                    action = "🚫 إنذار رسمي + خطة تحسين أداء عاجلة"
-                elif count >= threshold * 1.2:
-                    action = "⚠️ جلسة متابعة مع المدير المباشر"
-                else:
-                    action = "📌 متابعة دورية وتنبيه شفهي"
-                
-                st.markdown(f"""
-                <div style="background: rgba(30,30,50,0.8); border-right: 4px solid #f5576c; padding: 12px 18px; border-radius: 10px; margin-bottom: 8px; color: white;">
-                    <b>{row['الاسم']}</b> ({row['الرتبة']}) — <span style="color:#ffd93d;">{count} حدث</span>
-                    <div style="font-size: 13px; opacity: 0.85; margin-top: 4px;">{action}</div>
-                </div>
-                """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    with st.container(border=True):
-        st.markdown("### 🕐 آخر 10 أحداث مسجلة")
-        
-        recent = filtered.sort_values("التاريخ_dt", ascending=False).head(10).copy()
-        recent["التاريخ"] = recent["التاريخ_dt"].dt.strftime("%Y-%m-%d")
-        
-        display_cols = ["التاريخ", "اسم الموظف", "الرتبة", "الحدث", "رقم السند"]
-        if "ملاحظات" in recent.columns:
-            display_cols.append("ملاحظات")
-        
-        st.dataframe(recent[display_cols].reset_index(drop=True), use_container_width=True, height=min(450, 50 + len(recent) * 38))
-
-
-# ==================== تبويب: الإعدادات وإضافة البيانات ====================
-def render_settings_tab():
-    st.subheader("⚙️ الإعدادات وإضافة البيانات")
-    
-    tab1, tab2, tab3 = st.tabs(["➕ إضافة حدث جديد", "📥 رفع ملف بيانات", "🧪 بيانات تجريبية"])
-    
-    with tab1:
-        with st.form("add_event_form"):
-            st.markdown("#### سجل حدث جديد")
-            col1, col2 = st.columns(2)
-            with col1:
-                emp_name = st.text_input("اسم الموظف")
-                rank = st.text_input("الرتبة")
-                event_date = st.date_input("التاريخ")
-            with col2:
-                event_type = st.selectbox("الحدث", ["خروجية", "مرضية", "غياب", "تأخير", "جزاء", "مكافأة", "أخرى"])
-                sanad_no = st.text_input("رقم السند")
-                notes = st.text_area("ملاحظات (اختياري)")
-                
-            submitted = st.form_submit_button("حفظ الحدث")
-            
-            if submitted:
-                if emp_name and event_type:
-                    df = load_records()
-                    new_row = pd.DataFrame([{
-                        "التاريخ": event_date.strftime("%Y-%m-%d"),
-                        "اسم الموظف": emp_name,
-                        "الرتبة": rank,
-                        "الحدث": event_type,
-                        "رقم السند": sanad_no,
-                        "ملاحظات": notes
-                    }])
-                    df = pd.concat([df, new_row], ignore_index=True)
-                    save_records(df)
-                    st.success("✅ تم حفظ الحدث بنجاح!")
-                else:
-                    st.error("⚠️ يرجى إدخال اسم الموظف ونوع الحدث على الأقل.")
-                    
-    with tab2:
-        st.markdown("#### رفع ملف CSV")
-        uploaded_file = st.file_uploader("اختر ملف CSV", type=["csv"])
-        if uploaded_file is not None:
-            try:
-                new_df = pd.read_csv(uploaded_file)
-                save_records(new_df)
-                st.success("✅ تم رفع البيانات بنجاح!")
-            except Exception as e:
-                st.error(f"⚠️ حدث خطأ: {e}")
-                
-    with tab3:
-        st.markdown("#### إضافة بيانات تجريبية")
-        st.info("هذا الخيار سيقوم بإنشاء بيانات وهمية لتجربة لوحة التحكم.")
-        if st.button("توليد بيانات تجريبية"):
-            import random
-            from datetime import timedelta
-            
-            names = ["أحمد علي", "محمد حسن", "خالد إبراهيم", "سعيد محمود", "يوسف كمال", "عمر فاروق"]
-            ranks = ["فني", "عامل", "مشرف", "مدير"]
-            events = ["خروجية", "مرضية", "غياب", "تأخير", "جزاء"]
-            
-            data = []
-            for _ in range(50):
-                d = date.today() - timedelta(days=random.randint(0, 90))
-                data.append({
-                    "التاريخ": d.strftime("%Y-%m-%d"),
-                    "اسم الموظف": random.choice(names),
-                    "الرتبة": random.choice(ranks),
-                    "الحدث": random.choice(events),
-                    "رقم السند": f"SND-{random.randint(1000, 9999)}",
-                    "ملاحظات": ""
-                })
-            df = pd.DataFrame(data)
-            save_records(df)
-            st.success("✅ تم توليد 50 حدث تجريبي بنجاح! اذهب للوحة التحكم لرؤيتها.")
-
-
-# ==================== الدوال الأساسية اللي app.py بيدور عليها ====================
-def render_employees_section():
-    """الدالة اللي app.py بينادي عليها"""
-    st.title("📊 نظام تقييم أداء الموظفين")
+    st.markdown(f"**عدد السندات: {len(filtered)}**")
     st.markdown("---")
     
-    tab_dash, tab_rank, tab_settings = st.tabs(["📈 لوحة التحكم", "🏆 الترتيب والتحذيرات", "⚙️ الإعدادات"])
+    if filtered.empty:
+        st.warning("⚠️ مفيش سندات مطابقة للفلاتر")
+    else:
+        filtered_display = filtered.drop(columns=["التاريخ_dt"], errors="ignore").reset_index(drop=True)
+        st.caption("💡 علّم على ☑ في عمود 'اختر' لتعديل أو حذف السند")
+        
+        df_editor = filtered_display.copy()
+        for col in df_editor.columns:
+            df_editor[col] = df_editor[col].astype(str)
+        df_editor.insert(0, "اختر", False)
+        
+        edited_df = st.data_editor(
+            df_editor,
+            use_container_width=True,
+            hide_index=True,
+            height=450,
+            key="emp_records_editor",
+            column_config={
+                "اختر": st.column_config.CheckboxColumn("اختر", default=False, width="small"),
+                "رقم السند": st.column_config.TextColumn("🔢 السند", width="small"),
+                "التاريخ": st.column_config.TextColumn("📅 التاريخ", width="small"),
+                "اسم الموظف": st.column_config.TextColumn("👤 الموظف", width="small"),
+                "الرتبة": st.column_config.TextColumn("🏷️ الرتبة", width="small"),
+                "الحدث": st.column_config.TextColumn("📋 الحدث", width="medium"),
+                "ملاحظات": st.column_config.TextColumn("📝 ملاحظات", width="medium"),
+                "الإجراء المتخذ": st.column_config.TextColumn("⚖️ الإجراء", width="medium"),
+            }
+        )
+        
+        st.markdown("---")
+        st.markdown("### 🔧 إجراءات")
+        
+        col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 3])
+        
+        with col_btn1:
+            if st.button("✏️ تعديل المحدد", use_container_width=True, type="primary", key="edit_emp_record_btn"):
+                selected = edited_df[edited_df["اختر"] == True]
+                if len(selected) == 0:
+                    st.warning("⚠️ علّم على سند أولًا")
+                elif len(selected) > 1:
+                    st.error("⚠️ اختار سند واحد بس")
+                else:
+                    rec_id = str(selected.iloc[0]["رقم السند"])
+                    st.session_state["edit_employee_record"] = rec_id
+                    st.rerun()
+        
+        with col_btn2:
+            if st.button("🗑️ حذف المحدد", use_container_width=True, key="delete_emp_record_btn"):
+                selected = edited_df[edited_df["اختر"] == True]
+                if len(selected) == 0:
+                    st.warning("⚠️ علّم على سند أولًا")
+                elif len(selected) > 1:
+                    st.error("⚠️ اختار سند واحد بس")
+                else:
+                    rec_id = str(selected.iloc[0]["رقم السند"])
+                    st.session_state["delete_employee_record"] = rec_id
+                    st.rerun()
+        
+        with col_btn3:
+            st.markdown("💡 **ملاحظة:** الفورم بيظهر تحت الجدول")
+        
+        if st.session_state.get("edit_employee_record"):
+            st.markdown("---")
+            render_edit_form_inline(st.session_state["edit_employee_record"])
+        
+        if st.session_state.get("delete_employee_record"):
+            st.markdown("---")
+            render_delete_form_inline(st.session_state["delete_employee_record"])
+
+# ==================== تبويب: البحث عن موظف ====================
+def render_search_tab():
+    st.subheader("🔍 البحث عن موظف")
+    employees_df = load_employees()
     
-    with tab_dash:
+    if employees_df.empty:
+        st.warning("⚠️ مفيش موظفين مسجلين")
+        return
+    
+    employee_names = employees_df["الاسم"].astype(str).tolist()
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        selected_emp = st.selectbox("👤 اختار الموظف *", ["-- اختر --"] + employee_names, key="search_emp_select")
+    with col2:
+        search_from = st.date_input("📅 من تاريخ", value=date(date.today().year, 1, 1), key="search_emp_from")
+    with col3:
+        search_to = st.date_input("📅 إلى تاريخ", value=date.today(), key="search_emp_to")
+    
+    if selected_emp == "-- اختر --":
+        st.info("💡 اختار موظف لعرض بياناته")
+        return
+    
+    st.markdown("---")
+    rank = get_employee_rank(selected_emp)
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 15px; color: white; margin-bottom: 20px;">
+        <div style="font-size: 14px;">👤 الموظف</div>
+        <div style="font-size: 28px; font-weight: bold; margin: 8px 0;">{selected_emp}</div>
+        <div style="font-size: 16px;">🏷️ {rank}</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    stats = get_employee_stats(selected_emp, search_from, search_to)
+    
+    st.markdown(f"### 📊 إحصائيات من {search_from} إلى {search_to}")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("📋 إجمالي الأحداث", stats["count"])
+    with col2:
+        st.metric("📅 الفترة", f"{(search_to - search_from).days} يوم")
+    
+    if stats["events_breakdown"]:
+        st.markdown("---")
+        st.markdown("### 📋 تفصيل الأحداث")
+        sorted_breakdown = sorted(stats["events_breakdown"].items(), key=lambda x: x[1], reverse=True)
+        for event, count in sorted_breakdown:
+            st.markdown(f"""
+            <div style="background: rgba(20,20,40,0.6); border-right: 4px solid #00e5ff; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                <span style="font-size: 16px;">📋 <b>{event}</b></span>
+                <span style="float: left; font-size: 18px; color: #00e5ff; font-weight: bold;">{count}</span>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.markdown("### 📋 كل سجلات الموظف")
+    
+    emp_records = get_employee_records(selected_emp, search_from, search_to)
+    
+    if emp_records.empty:
+        st.info("📭 مفيش سجلات للموظف في الفترة المحددة")
+    else:
+        display_cols = ["رقم السند", "التاريخ", "الحدث", "ملاحظات", "الإجراء المتخذ"]
+        st.dataframe(emp_records[display_cols], use_container_width=True, hide_index=True)
+
+# ==================== تبويب: الإعدادات ====================
+def render_settings_tab():
+    st.subheader("⚙️ الإعدادات")
+    
+    st.markdown("### 👥 إدارة الموظفين")
+    employees_df = load_employees()
+    
+    if not employees_df.empty:
+        st.markdown(f"**عدد الموظفين: {len(employees_df)}**")
+        ranks = employees_df["الرتبة"].value_counts().to_dict()
+        for rank, count in ranks.items():
+            st.markdown(f"- 🏷️ **{rank}**: {count} موظف")
+        
+        st.markdown("---")
+        search_emp = st.text_input("🔍 بحث بالاسم", "", key="settings_search_emp")
+        filtered_emps = employees_df.copy()
+        if search_emp:
+            filtered_emps = filtered_emps[filtered_emps["الاسم"].astype(str).str.contains(search_emp, case=False)]
+        
+        st.markdown(f"### 📋 قائمة الموظفين ({len(filtered_emps)})")
+        for i, row in filtered_emps.iterrows():
+            col1, col2, col3 = st.columns([3, 3, 1])
+            with col1:
+                st.markdown(f"👤 **{row['الاسم']}**")
+            with col2:
+                st.markdown(f"🏷️ {row['الرتبة']}")
+            with col3:
+                if st.button("🗑️", key=f"del_emp_{i}"):
+                    full_df = load_employees()
+                    full_df = full_df[full_df["الاسم"].astype(str) != str(row["الاسم"])]
+                    save_employees(full_df)
+                    st.success(f"تم حذف: {row['الاسم']}")
+                    st.rerun()
+    
+    st.markdown("---")
+    st.markdown("### ➕ إضافة موظف جديد")
+    col1, col2 = st.columns([2, 2])
+    with col1:
+        new_emp_name = st.text_input("اسم الموظف", placeholder="مثال: محمد أحمد", key="settings_new_emp")
+    with col2:
+        new_emp_rank = st.text_input("الرتبة الوظيفية", placeholder="مثال: سائق / عامل عادي", key="settings_new_rank")
+    
+    if st.button("➕ إضافة الموظف", key="settings_add_emp", use_container_width=True, type="primary"):
+        if new_emp_name.strip() and new_emp_rank.strip():
+            full_df = load_employees()
+            if new_emp_name.strip() in full_df["الاسم"].astype(str).tolist():
+                st.warning(f"⚠️ الموظف {new_emp_name} موجود بالفعل")
+            else:
+                new_row = pd.DataFrame([{"الاسم": new_emp_name.strip(), "الرتبة": new_emp_rank.strip()}])
+                full_df = pd.concat([full_df, new_row], ignore_index=True)
+                save_employees(full_df)
+                st.success(f"✅ تم إضافة الموظف: {new_emp_name}")
+                st.rerun()
+        else:
+            st.error("⚠️ املأ الاسم والرتبة")
+    
+    st.markdown("---")
+    st.markdown("### 📋 إدارة الأحداث")
+    events_list = load_events()
+    st.markdown(f"**عدد الأحداث: {len(events_list)}**")
+    
+    for i, ev in enumerate(events_list):
+        col1, col2 = st.columns([5, 1])
+        with col1:
+            st.markdown(f"📋 {ev}")
+        with col2:
+            if st.button("🗑️", key=f"del_event_{i}"):
+                events_list.remove(ev)
+                save_events(events_list)
+                st.success(f"تم حذف: {ev}")
+                st.rerun()
+    
+    st.markdown("---")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        new_event_name = st.text_input("حدث جديد", placeholder="مثال: تأخر متكرر", key="settings_new_event")
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("➕ إضافة حدث", key="settings_add_event"):
+            if new_event_name.strip():
+                events_list = load_events()
+                if new_event_name.strip() in events_list:
+                    st.warning("⚠️ الحدث موجود بالفعل")
+                else:
+                    events_list.append(new_event_name.strip())
+                    save_events(events_list)
+                    st.success(f"✅ تم إضافة: {new_event_name}")
+                    st.rerun()
+            else:
+                st.error("⚠️ اكتب اسم الحدث")
+    
+    st.markdown("---")
+    
+    # ==================== بيانات تجريبية ====================
+    st.markdown("### 🧪 بيانات تجريبية")
+    st.caption("زر لإضافة بيانات تجريبية عشان تجرب لوحة التحكم والتقارير")
+    
+    col_demo1, col_demo2 = st.columns(2)
+    
+    with col_demo1:
+        if st.button("➕ إضافة 60 سند تجريبي", use_container_width=True, type="primary", key="add_demo_btn"):
+            added = add_demo_data()
+            if added > 0:
+                st.success(f"✅ تم إضافة {added} سند تجريبي")
+                st.rerun()
+            else:
+                st.error("⚠️ لم يتم إضافة أي سند")
+    
+    with col_demo2:
+        if st.button("🗑️ حذف كل البيانات التجريبية", use_container_width=True, key="del_demo_btn"):
+            full_df = load_records()
+            before = len(full_df)
+            full_df = full_df[~full_df["رقم السند"].astype(str).str.startswith("DEMO-")]
+            after = len(full_df)
+            save_records(full_df)
+            st.success(f"✅ تم حذف {before - after} سند تجريبي")
+            st.rerun()
+    
+    st.markdown("---")
+    
+    st.markdown("### ℹ️ معلومات")
+    records = load_records()
+    employees = load_employees()
+    col1, col2, col3 = st.columns(3)
+    col1.metric("👥 عدد الموظفين", len(employees))
+    col2.metric("📋 عدد الأحداث", len(load_events()))
+    col3.metric("📝 عدد السندات", len(records))
+
+# ==================== دالة القسم الرئيسية ====================
+def render_employees_section():
+    init_employees_files()
+    
+    st.title("👥 قسم تقييم موظفين المخزن")
+    st.markdown("### متابعة سلوك وأداء الموظفين")
+    st.markdown("---")
+    
+    tab0, tab1, tab2, tab3, tab4 = st.tabs([
+        "📈 لوحة التحكم",
+        "➕ إضافة سند",
+        "📋 عرض السندات",
+        "🔍 البحث عن موظف",
+        "⚙️ الإعدادات"
+    ])
+    
+    with tab0:
         render_dashboard_tab()
-    with tab_rank:
-        render_ranking_tab()
-    with tab_settings:
+    
+    with tab1:
+        render_add_record_tab()
+    
+    with tab2:
+        render_records_tab()
+    
+    with tab3:
+        render_search_tab()
+    
+    with tab4:
         render_settings_tab()
 
-def main():
-    """دالة احتياطية لو الملف اتشغل لوحده"""
-    render_employees_section()
-
-if __name__ == "__main__":
-    main()
+# ==================== نهاية القسم ====================
