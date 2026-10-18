@@ -12,7 +12,6 @@ def load_records():
     if os.path.exists(DATA_FILE):
         try:
             df = pd.read_csv(DATA_FILE)
-            # التأكد من وجود الأعمدة الأساسية
             expected_cols = ["التاريخ", "اسم الموظف", "الرتبة", "الحدث", "رقم السند"]
             for col in expected_cols:
                 if col not in df.columns:
@@ -38,7 +37,6 @@ def render_dashboard_tab():
     
     df["التاريخ_dt"] = pd.to_datetime(df["التاريخ"], errors="coerce")
     
-    # ==================== فلاتر ====================
     with st.container(border=True):
         st.markdown("#### 🔍 فلترة البيانات")
         col1, col2 = st.columns(2)
@@ -60,7 +58,6 @@ def render_dashboard_tab():
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # ==================== KPI Cards (تصميم زجاجي) ====================
     total_events = len(filtered)
     total_employees = filtered["اسم الموظف"].nunique()
     total_event_types = filtered["الحدث"].nunique()
@@ -114,7 +111,6 @@ def render_dashboard_tab():
 
     st.markdown("<br><br>", unsafe_allow_html=True)
 
-    # ==================== أفضل وأسوأ موظف ====================
     with st.container(border=True):
         st.markdown("### 🏆 تقييم الموظفين (الأفضل والأسوأ)")
         
@@ -160,10 +156,8 @@ def render_dashboard_tab():
 
     st.markdown("<br><br>", unsafe_allow_html=True)
 
-    # ==================== الرسوم البيانية 3D ====================
     col_chart1, col_chart2 = st.columns(2)
     
-    # ---------- الرسم 1: أنواع الأحداث (3D Bar) ----------
     with col_chart1:
         with st.container(border=True):
             st.markdown("### 📊 أنواع الأحداث (3D)")
@@ -203,7 +197,6 @@ def render_dashboard_tab():
                 )
                 st.plotly_chart(fig_event, use_container_width=True)
 
-    # ---------- الرسم 2: تطور الأحداث (3D) ----------
     with col_chart2:
         with st.container(border=True):
             st.markdown("### 📈 تطور الأحداث شهرياً (3D)")
@@ -287,7 +280,6 @@ def render_ranking_tab():
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # ==================== جدول الترتيب ====================
     with st.container(border=True):
         st.markdown("### 📋 ترتيب الموظفين حسب عدد الأحداث")
         
@@ -331,7 +323,6 @@ def render_ranking_tab():
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # ==================== التحذيرات ====================
     with st.container(border=True):
         st.markdown("### 🚨 التحذيرات (الموظفون اللي يحتاجون متابعة)")
         
@@ -361,7 +352,6 @@ def render_ranking_tab():
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # ==================== الإجراءات المقترحة ====================
     with st.container(border=True):
         st.markdown("### 📝 الإجراءات المقترحة")
         
@@ -386,7 +376,6 @@ def render_ranking_tab():
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # ==================== آخر 10 أحداث ====================
     with st.container(border=True):
         st.markdown("### 🕐 آخر 10 أحداث مسجلة")
         
@@ -476,19 +465,9 @@ def render_settings_tab():
             st.success("✅ تم توليد 50 حدث تجريبي بنجاح! اذهب للوحة التحكم لرؤيتها.")
 
 
-# ==================== الدالة الرئيسية (Main) ====================
-def main():
-    st.set_page_config(page_title="تقييم أداء الموظفين", page_icon="📊", layout="wide")
-    
-    # ستايل عام للصفحة (اختياري)
-    st.markdown("""
-    <style>
-        .stApp {
-            background-color: #0e1117;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-    
+# ==================== الدوال الأساسية اللي app.py بيدور عليها ====================
+def render_employees_section():
+    """الدالة اللي app.py بينادي عليها"""
     st.title("📊 نظام تقييم أداء الموظفين")
     st.markdown("---")
     
@@ -496,12 +475,14 @@ def main():
     
     with tab_dash:
         render_dashboard_tab()
-        
     with tab_rank:
         render_ranking_tab()
-        
     with tab_settings:
         render_settings_tab()
+
+def main():
+    """دالة احتياطية لو الملف اتشغل لوحده"""
+    render_employees_section()
 
 if __name__ == "__main__":
     main()
