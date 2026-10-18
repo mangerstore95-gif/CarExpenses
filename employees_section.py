@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import os
+import random
 import plotly.graph_objects as go
 
 # ==================== الملفات ====================
@@ -175,8 +176,59 @@ def get_event_stats(date_from=None, date_to=None):
     counts = df["الحدث"].value_counts().reset_index()
     counts.columns = ["الحدث", "عدد المرات"]
     return counts.sort_values("عدد المرات", ascending=False)
+
+# ==================== دالة إضافة بيانات تجريبية ====================
+def add_demo_data():
+    employees_df = load_employees()
+    events_list = load_events()
     
-# ==================== دالة فورم التعديل (تحت الجدول) ====================
+    if employees_df.empty or not events_list:
+        return 0
+    
+    employee_names = employees_df["الاسم"].astype(str).tolist()
+    sample_employees = employee_names[:15] if len(employee_names) >= 15 else employee_names
+    
+    full_df = load_records()
+    added_count = 0
+    today = date.today()
+    
+    for i in range(60):
+        days_back = random.randint(0, 90)
+        record_date = today - timedelta(days=days_back)
+        emp = random.choice(sample_employees)
+        rank = get_employee_rank(emp)
+        
+        if random.random() < 0.4:
+            event = random.choice(["مرضية", "غياب", "خروجيه"])
+        else:
+            event = random.choice(events_list)
+        
+        notes = f"ملاحظة تجريبية رقم {i+1}"
+        actions = ["إنذار شفهي", "خصم يوم", "إنذار كتابي", "لا يوجد", "توجيه"]
+        action = random.choice(actions)
+        
+        new_id = f"DEMO-{i+1:04d}"
+        
+        if new_id in full_df["رقم السند"].astype(str).tolist():
+            continue
+        
+        new_row = {
+            "رقم السند": new_id,
+            "التاريخ": str(record_date),
+            "اسم الموظف": emp,
+            "الرتبة": rank,
+            "الحدث": event,
+            "ملاحظات": notes,
+            "الإجراء المتخذ": action,
+        }
+        
+        full_df = pd.concat([full_df, pd.DataFrame([new_row])], ignore_index=True)
+        added_count += 1
+    
+    save_records(full_df)
+    return added_count
+
+# ==================== فورم التعديل (تحت الجدول) ====================
 def render_edit_form_inline(record_id):
     df = load_records()
     match = df[df["رقم السند"].astype(str) == str(record_id)]
@@ -247,7 +299,7 @@ def render_edit_form_inline(record_id):
             st.session_state["edit_employee_record"] = None
             st.rerun()
 
-# ==================== دالة فورم الحذف (تحت الجدول) ====================
+# ==================== فورم الحذف (تحت الجدول) ====================
 def render_delete_form_inline(record_id):
     df = load_records()
     match = df[df["رقم السند"].astype(str) == str(record_id)]
@@ -281,10 +333,11 @@ def render_delete_form_inline(record_id):
         if st.button("❌ إلغاء", use_container_width=True, key=f"cancel_del_inline_{record_id}"):
             st.session_state["delete_employee_record"] = None
             st.rerun()
-
+            
 # ==================== تبويب: إضافة سند ====================
 def render_add_record_tab():
     st.subheader("➕ إضافة سند جديد")
+    
     employees_df = load_employees()
     events_list = load_events()
     
@@ -295,12 +348,14 @@ def render_add_record_tab():
     employee_names = employees_df["الاسم"].astype(str).tolist()
     
     col1, col2 = st.columns(2)
+    
     with col1:
         record_date = st.date_input("📅 التاريخ *", value=date.today(), key="new_emp_record_date")
         selected_emp = st.selectbox("👤 اسم الموظف *", ["-- اختر --"] + employee_names, key="new_emp_record_employee")
         if selected_emp != "-- اختر --":
             rank = get_employee_rank(selected_emp)
             st.info(f"**الرتبة الوظيفية:** {rank}")
+    
     with col2:
         selected_event = st.selectbox("📋 الحدث *", ["-- اختر --"] + events_list, key="new_emp_record_event")
     
@@ -321,6 +376,7 @@ def render_add_record_tab():
         else:
             rank = get_employee_rank(selected_emp)
             new_id = get_next_record_id()
+            
             new_row = {
                 "رقم السند": new_id,
                 "التاريخ": str(record_date),
@@ -330,9 +386,11 @@ def render_add_record_tab():
                 "ملاحظات": notes.strip(),
                 "الإجراء المتخذ": action.strip(),
             }
+            
             full_df = load_records()
             full_df = pd.concat([full_df, pd.DataFrame([new_row])], ignore_index=True)
             save_records(full_df)
+            
             st.success(f"✅ تم حفظ السند **{new_id}** — {selected_emp} — {selected_event}")
             st.balloons()
             st.rerun()
@@ -370,8 +428,10 @@ def render_records_tab():
         (filtered["التاريخ_dt"].dt.date >= date_from) & 
         (filtered["التاريخ_dt"].dt.date <= date_to)
     ]
+    
     if filter_emp != "الكل":
         filtered = filtered[filtered["اسم الموظف"].astype(str) == filter_emp]
+    
     if filter_event != "الكل":
         filtered = filtered[filtered["الحدث"].astype(str) == filter_event]
     
@@ -382,6 +442,7 @@ def render_records_tab():
         st.warning("⚠️ مفيش سندات مطابقة للفلاتر")
     else:
         filtered_display = filtered.drop(columns=["التاريخ_dt"], errors="ignore").reset_index(drop=True)
+        
         st.caption("💡 علّم على ☑ في عمود 'اختر' لتعديل أو حذف السند")
         
         df_editor = filtered_display.copy()
@@ -447,12 +508,13 @@ def render_records_tab():
         if st.session_state.get("delete_employee_record"):
             st.markdown("---")
             render_delete_form_inline(st.session_state["delete_employee_record"])
-            
+
 # ==================== تبويب: البحث عن موظف ====================
 def render_search_tab():
     st.subheader("🔍 البحث عن موظف")
     
     employees_df = load_employees()
+    
     if employees_df.empty:
         st.warning("⚠️ مفيش موظفين مسجلين")
         return
@@ -472,6 +534,7 @@ def render_search_tab():
         return
     
     st.markdown("---")
+    
     rank = get_employee_rank(selected_emp)
     
     st.markdown(f"""
@@ -496,6 +559,7 @@ def render_search_tab():
         st.markdown("---")
         st.markdown("### 📋 تفصيل الأحداث")
         sorted_breakdown = sorted(stats["events_breakdown"].items(), key=lambda x: x[1], reverse=True)
+        
         for event, count in sorted_breakdown:
             st.markdown(f"""
             <div style="background: rgba(20,20,40,0.6); border-right: 4px solid #00e5ff; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
@@ -514,12 +578,13 @@ def render_search_tab():
     else:
         display_cols = ["رقم السند", "التاريخ", "الحدث", "ملاحظات", "الإجراء المتخذ"]
         st.dataframe(emp_records[display_cols], use_container_width=True, hide_index=True)
-
+        
 # ==================== تبويب: التقارير ====================
 def render_reports_tab():
     st.subheader("📊 التقارير والإحصائيات")
     
     df = load_records()
+    
     if df.empty:
         st.info("📭 مفيش بيانات للتقارير")
         return
@@ -606,17 +671,21 @@ def render_settings_tab():
     
     if not employees_df.empty:
         st.markdown(f"**عدد الموظفين: {len(employees_df)}**")
+        
         ranks = employees_df["الرتبة"].value_counts().to_dict()
         for rank, count in ranks.items():
             st.markdown(f"- 🏷️ **{rank}**: {count} موظف")
         
         st.markdown("---")
+        
         search_emp = st.text_input("🔍 بحث بالاسم", "", key="settings_search_emp")
+        
         filtered_emps = employees_df.copy()
         if search_emp:
             filtered_emps = filtered_emps[filtered_emps["الاسم"].astype(str).str.contains(search_emp, case=False)]
         
         st.markdown(f"### 📋 قائمة الموظفين ({len(filtered_emps)})")
+        
         for i, row in filtered_emps.iterrows():
             col1, col2, col3 = st.columns([3, 3, 1])
             with col1:
@@ -633,6 +702,7 @@ def render_settings_tab():
     
     st.markdown("---")
     st.markdown("### ➕ إضافة موظف جديد")
+    
     col1, col2 = st.columns([2, 2])
     with col1:
         new_emp_name = st.text_input("اسم الموظف", placeholder="مثال: محمد أحمد", key="settings_new_emp")
@@ -645,7 +715,10 @@ def render_settings_tab():
             if new_emp_name.strip() in full_df["الاسم"].astype(str).tolist():
                 st.warning(f"⚠️ الموظف {new_emp_name} موجود بالفعل")
             else:
-                new_row = pd.DataFrame([{"الاسم": new_emp_name.strip(), "الرتبة": new_emp_rank.strip()}])
+                new_row = pd.DataFrame([{
+                    "الاسم": new_emp_name.strip(),
+                    "الرتبة": new_emp_rank.strip(),
+                }])
                 full_df = pd.concat([full_df, new_row], ignore_index=True)
                 save_employees(full_df)
                 st.success(f"✅ تم إضافة الموظف: {new_emp_name}")
@@ -657,6 +730,7 @@ def render_settings_tab():
     st.markdown("### 📋 إدارة الأحداث (القائمة المنسدلة)")
     
     events_list = load_events()
+    
     st.markdown(f"**عدد الأحداث: {len(events_list)}**")
     
     for i, ev in enumerate(events_list):
@@ -671,6 +745,7 @@ def render_settings_tab():
                 st.rerun()
     
     st.markdown("---")
+    
     col1, col2 = st.columns([3, 1])
     with col1:
         new_event_name = st.text_input("حدث جديد", placeholder="مثال: تأخر متكرر", key="settings_new_event")
@@ -690,9 +765,40 @@ def render_settings_tab():
                 st.error("⚠️ اكتب اسم الحدث")
     
     st.markdown("---")
+    
+    # ==================== بيانات تجريبية ====================
+    st.markdown("### 🧪 بيانات تجريبية")
+    st.caption("زر لإضافة بيانات تجريبية عشان تجرب الداشبورد والتقارير")
+    
+    col_demo1, col_demo2 = st.columns(2)
+    
+    with col_demo1:
+        if st.button("➕ إضافة 60 سند تجريبي", use_container_width=True, type="primary", key="add_demo_btn"):
+            added = add_demo_data()
+            if added > 0:
+                st.success(f"✅ تم إضافة {added} سند تجريبي")
+                st.rerun()
+            else:
+                st.error("⚠️ لم يتم إضافة أي سند")
+    
+    with col_demo2:
+        if st.button("🗑️ حذف كل البيانات التجريبية", use_container_width=True, key="del_demo_btn"):
+            full_df = load_records()
+            before = len(full_df)
+            full_df = full_df[~full_df["رقم السند"].astype(str).str.startswith("DEMO-")]
+            after = len(full_df)
+            save_records(full_df)
+            st.success(f"✅ تم حذف {before - after} سند تجريبي")
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # ==================== معلومات ====================
     st.markdown("### ℹ️ معلومات")
+    
     records = load_records()
     employees = load_employees()
+    
     col1, col2, col3 = st.columns(3)
     col1.metric("👥 عدد الموظفين", len(employees))
     col2.metric("📋 عدد الأحداث", len(load_events()))
