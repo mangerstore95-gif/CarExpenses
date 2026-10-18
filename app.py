@@ -8,6 +8,7 @@ from dashboard import render_dashboard
 from materials_section import render_materials_section
 from performance_section import render_performance_section
 from diesel_section import render_diesel_section
+from employees_section import render_employees_section
 
 st.set_page_config(page_title="إدارة مخازن مصنع القطامى", page_icon="🏭", layout="wide")
 
@@ -227,7 +228,7 @@ with st.sidebar:
     
     section = st.radio(
         "اختر القسم",
-        ["🚗 صيانة السيارات", "📦 صلاحية المواد الخام", "📊 مؤشر الأداء القياسي", "⛽ تعبئة الديزل"],
+        ["🚗 صيانة السيارات", "📦 صلاحية المواد الخام", "📊 مؤشر الأداء القياسي", "⛽ تعبئة الديزل", "👥 قيم موظفين المخزن"],
         label_visibility="collapsed",
         key="main_section_selector"
     )
@@ -247,6 +248,10 @@ if section == "📊 مؤشر الأداء القياسي":
 
 if section == "⛽ تعبئة الديزل":
     render_diesel_section()
+    st.stop()
+
+if section == "👥 قيم موظفين المخزن":
+    render_employees_section()
     st.stop()
 
 # ==================== قسم صيانة السيارات ====================
@@ -331,7 +336,7 @@ with tab1:
                 save_expense(new_row)
                 st.success(f"✅ تم حفظ الفاتورة {invoice_no} بنجاح!")
                 st.balloons()
-
+                
 with tab2:
     st.subheader("📋 كل الفواتير المسجلة")
     df = load_expenses()
@@ -594,7 +599,7 @@ with tab3:
             car_stats.columns = ["إجمالي المصاريف", "عدد الفواتير", "متوسط الفاتورة", "عدد السائقين"]
             car_stats = car_stats.sort_values("إجمالي المصاريف", ascending=False)
             st.dataframe(car_stats, use_container_width=True)
-
+            
 with tab4:
     st.subheader("⚙️ الإعدادات")
     st.markdown("---")
