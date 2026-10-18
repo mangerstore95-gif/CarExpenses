@@ -228,7 +228,7 @@ with st.sidebar:
     
     section = st.radio(
         "اختر القسم",
-        ["🚗 صيانة السيارات", "📦 صلاحية المواد الخام", "📊 مؤشر الأداء القياسي", "⛽ تعبئة الديزل", "👥 قيم موظفين المخزن"],
+        ["🚗 صيانة السيارات", "📦 صلاحية المواد الخام", "📊 مؤشر الأداء القياسي", "⛽ تعبئة الديزل", "👥 تقييم موظفين المخزن"],
         label_visibility="collapsed",
         key="main_section_selector"
     )
@@ -250,7 +250,7 @@ if section == "⛽ تعبئة الديزل":
     render_diesel_section()
     st.stop()
 
-if section == "👥 قيم موظفين المخزن":
+if section == "👥 تقييم موظفين المخزن":
     render_employees_section()
     st.stop()
 
