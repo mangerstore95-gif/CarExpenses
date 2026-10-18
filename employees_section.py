@@ -42,30 +42,22 @@ DEFAULT_WORKERS = [
 ]
 
 DEFAULT_EVENTS = [
-    "مرضية",
-    "غياب",
-    "خروجيه",
+    "مرضية", "غياب", "خروجيه",
     "التحدث باسلوب غير لائق مع زميله",
     "التحدث باسلوب غير لائق مع مسؤله",
     "التحدث باسلوب غير لائق مع العميل",
-    "دعم سياره",
-    "خطا تحميل",
-    "عدم الالتزام بالعمل",
-    "اهمال فالسياره",
+    "دعم سياره", "خطا تحميل",
+    "عدم الالتزام بالعمل", "اهمال فالسياره",
 ]
 
 # ==================== دوال التهيئة ====================
 def init_employees_files():
     if not os.path.exists(EMPLOYEES_FILE):
-        # نجمع السائقين والعمال
         all_employees = []
-        
         for d in DEFAULT_DRIVERS:
             all_employees.append({"الاسم": d, "الرتبة": "سائق"})
-        
         for w in DEFAULT_WORKERS:
             all_employees.append({"الاسم": w["الاسم"], "الرتبة": w["الرتبة"]})
-        
         pd.DataFrame(all_employees).to_excel(EMPLOYEES_FILE, index=False)
     
     if not os.path.exists(EVENTS_FILE):
@@ -97,14 +89,6 @@ def load_records():
     except:
         return pd.DataFrame()
 
-def load_drivers():
-    """يقرا السائقين من drivers.xlsx (للاستخدام في قسم الديزل والصيانة)"""
-    try:
-        df = pd.read_excel("drivers.xlsx")
-        return df["السائقين"].dropna().astype(str).tolist()
-    except:
-        return DEFAULT_DRIVERS
-
 # ==================== دوال الحفظ ====================
 def save_employees(df):
     df.to_excel(EMPLOYEES_FILE, index=False)
@@ -123,7 +107,6 @@ def get_next_record_id():
     return f"EMP-{len(df)+1:04d}"
 
 def get_employee_rank(name):
-    """يرجع الرتبة الوظيفية لموظف"""
     df = load_employees()
     if df.empty:
         return ""
@@ -133,106 +116,74 @@ def get_employee_rank(name):
     return ""
 
 def get_employee_records(emp_name, date_from=None, date_to=None):
-    """يرجع كل سجلات موظف معين"""
     df = load_records()
     if df.empty:
         return pd.DataFrame()
-    
     filtered = df[df["اسم الموظف"].astype(str) == str(emp_name)].copy()
-    
     if filtered.empty:
         return pd.DataFrame()
-    
     if date_from is not None and date_to is not None:
         filtered["التاريخ_dt"] = pd.to_datetime(filtered["التاريخ"], errors="coerce")
         filtered = filtered[
             (filtered["التاريخ_dt"].dt.date >= date_from) &
             (filtered["التاريخ_dt"].dt.date <= date_to)
         ]
-    
     return filtered
 
 def get_employee_stats(emp_name, date_from=None, date_to=None):
-    """يرجع إحصائيات موظف"""
     records = get_employee_records(emp_name, date_from, date_to)
-    
     if records.empty:
-        return {
-            "count": 0,
-            "events_breakdown": {},
-        }
-    
+        return {"count": 0, "events_breakdown": {}}
     breakdown = records["الحدث"].value_counts().to_dict()
-    
-    return {
-        "count": len(records),
-        "events_breakdown": breakdown,
-    }
+    return {"count": len(records), "events_breakdown": breakdown}
 
 def get_all_employees_stats(date_from=None, date_to=None):
-    """يرجع إحصائيات كل الموظفين"""
     df = load_records()
     employees = load_employees()
-    
     if df.empty or employees.empty:
         return pd.DataFrame()
-    
     if date_from is not None and date_to is not None:
         df["التاريخ_dt"] = pd.to_datetime(df["التاريخ"], errors="coerce")
         df = df[
             (df["التاريخ_dt"].dt.date >= date_from) &
             (df["التاريخ_dt"].dt.date <= date_to)
         ]
-    
     results = []
     for _, emp in employees.iterrows():
         name = str(emp["الاسم"])
         rank = str(emp["الرتبة"])
-        
         emp_records = df[df["اسم الموظف"].astype(str) == name]
         count = len(emp_records)
-        
         if count > 0:
-            results.append({
-                "الاسم": name,
-                "الرتبة": rank,
-                "عدد الأحداث": count,
-            })
-    
+            results.append({"الاسم": name, "الرتبة": rank, "عدد الأحداث": count})
     if results:
         return pd.DataFrame(results).sort_values("عدد الأحداث", ascending=False)
     return pd.DataFrame()
 
 def get_event_stats(date_from=None, date_to=None):
-    """إحصائيات الأحداث (كل حدث وكام مرة)"""
     df = load_records()
-    
     if df.empty:
         return pd.DataFrame()
-    
     if date_from is not None and date_to is not None:
         df["التاريخ_dt"] = pd.to_datetime(df["التاريخ"], errors="coerce")
         df = df[
             (df["التاريخ_dt"].dt.date >= date_from) &
             (df["التاريخ_dt"].dt.date <= date_to)
         ]
-    
     if df.empty:
         return pd.DataFrame()
-    
     counts = df["الحدث"].value_counts().reset_index()
     counts.columns = ["الحدث", "عدد المرات"]
     return counts.sort_values("عدد المرات", ascending=False)
-
-# ==================== نافذة تعديل سند ====================
-@st.dialog("✏️ تعديل السند", width="large")
-def edit_record_dialog(record_id):
+    
+# ==================== دالة فورم التعديل (تحت الجدول) ====================
+def render_edit_form_inline(record_id):
     df = load_records()
     match = df[df["رقم السند"].astype(str) == str(record_id)]
     
     if match.empty:
         st.error("⚠️ السند مش موجود")
-        if st.button("إغلاق"):
+        if st.button("❌ إغلاق", key="close_edit_inline_empty"):
             st.session_state["edit_employee_record"] = None
             st.rerun()
         return
@@ -240,10 +191,11 @@ def edit_record_dialog(record_id):
     row = match.iloc[0]
     employees_df = load_employees()
     events_list = load_events()
-    
     employee_names = employees_df["الاسم"].astype(str).tolist() if not employees_df.empty else []
     
-    # القيم الحالية
+    st.markdown(f"### ✏️ تعديل السند: `{record_id}`")
+    st.markdown("---")
+    
     cur_date = row.get("التاريخ", str(date.today()))
     try:
         cur_date_parsed = pd.to_datetime(cur_date).date()
@@ -253,74 +205,63 @@ def edit_record_dialog(record_id):
     cur_emp = str(row.get("اسم الموظف", ""))
     cur_event = str(row.get("الحدث", ""))
     
-    st.markdown(f"**رقم السند:** `{record_id}`")
-    st.markdown("---")
-    
     col1, col2 = st.columns(2)
-    
     with col1:
-        new_date = st.date_input("📅 التاريخ", value=cur_date_parsed, key=f"edit_emp_date_{record_id}")
-        
+        new_date = st.date_input("📅 التاريخ", value=cur_date_parsed, key=f"edit_date_inline_{record_id}")
         emp_idx = employee_names.index(cur_emp) if cur_emp in employee_names else 0
-        new_emp = st.selectbox("👤 اسم الموظف", employee_names, index=emp_idx, key=f"edit_emp_name_{record_id}")
-        
-        # الرتبة (تلقائي)
+        new_emp = st.selectbox("👤 اسم الموظف", employee_names, index=emp_idx, key=f"edit_emp_inline_{record_id}")
         rank = get_employee_rank(new_emp)
         st.info(f"**الرتبة الوظيفية:** {rank}")
-    
     with col2:
         ev_options = ["-- اختر --"] + events_list
         ev_idx = ev_options.index(cur_event) if cur_event in ev_options else 0
-        new_event = st.selectbox("📋 الحدث", ev_options, index=ev_idx, key=f"edit_emp_event_{record_id}")
+        new_event = st.selectbox("📋 الحدث", ev_options, index=ev_idx, key=f"edit_event_inline_{record_id}")
     
-    new_notes = st.text_area("📝 ملاحظات", value=str(row.get("ملاحظات", "")), key=f"edit_emp_notes_{record_id}")
-    new_action = st.text_area("⚖️ الإجراء المتخذ", value=str(row.get("الإجراء المتخذ", "")), key=f"edit_emp_action_{record_id}")
+    new_notes = st.text_area("📝 ملاحظات", value=str(row.get("ملاحظات", "")), key=f"edit_notes_inline_{record_id}")
+    new_action = st.text_area("⚖️ الإجراء المتخذ", value=str(row.get("الإجراء المتخذ", "")), key=f"edit_action_inline_{record_id}")
     
     st.markdown("---")
-    
     col_save, col_cancel = st.columns(2)
     
     with col_save:
-        if st.button("💾 حفظ التعديلات", use_container_width=True, type="primary", key=f"save_edit_emp_{record_id}"):
+        if st.button("💾 حفظ التعديلات", use_container_width=True, type="primary", key=f"save_inline_{record_id}"):
             if new_event == "-- اختر --":
                 st.error("⚠️ الحدث مطلوب")
             else:
                 full_df = load_records()
                 mask = full_df["رقم السند"].astype(str) == str(record_id)
                 idx = full_df[mask].index[0]
-                
                 full_df.loc[idx, "التاريخ"] = str(new_date)
                 full_df.loc[idx, "اسم الموظف"] = new_emp
                 full_df.loc[idx, "الرتبة"] = rank
                 full_df.loc[idx, "الحدث"] = new_event
                 full_df.loc[idx, "ملاحظات"] = new_notes.strip()
                 full_df.loc[idx, "الإجراء المتخذ"] = new_action.strip()
-                
                 save_records(full_df)
                 st.session_state["edit_employee_record"] = None
                 st.success(f"✅ تم تحديث السند {record_id}")
                 st.rerun()
     
     with col_cancel:
-        if st.button("❌ إلغاء", use_container_width=True, key=f"cancel_edit_emp_{record_id}"):
+        if st.button("❌ إلغاء", use_container_width=True, key=f"cancel_inline_{record_id}"):
             st.session_state["edit_employee_record"] = None
             st.rerun()
 
-# ==================== نافذة حذف سند ====================
-@st.dialog("🗑️ تأكيد الحذف", width="large")
-def delete_record_dialog(record_id):
+# ==================== دالة فورم الحذف (تحت الجدول) ====================
+def render_delete_form_inline(record_id):
     df = load_records()
     match = df[df["رقم السند"].astype(str) == str(record_id)]
     
     if match.empty:
         st.error("⚠️ السند مش موجود")
-        if st.button("إغلاق"):
+        if st.button("❌ إغلاق", key="close_del_inline_empty"):
             st.session_state["delete_employee_record"] = None
             st.rerun()
         return
     
     row = match.iloc[0]
     
+    st.markdown(f"### 🗑️ حذف السند: `{record_id}`")
     st.warning(f"⚠️ **هل أنت متأكد من حذف السند** `{record_id}` **؟**")
     st.markdown(f"**التاريخ:** {row.get('التاريخ', '-')}")
     st.markdown(f"**الموظف:** {row.get('اسم الموظف', '-')}")
@@ -329,7 +270,7 @@ def delete_record_dialog(record_id):
     
     col_yes, col_no = st.columns(2)
     with col_yes:
-        if st.button("✅ نعم، احذف", type="primary", use_container_width=True, key=f"confirm_del_emp_{record_id}"):
+        if st.button("✅ نعم، احذف", type="primary", use_container_width=True, key=f"confirm_del_inline_{record_id}"):
             full_df = load_records()
             full_df = full_df[full_df["رقم السند"].astype(str) != str(record_id)]
             save_records(full_df)
@@ -337,14 +278,13 @@ def delete_record_dialog(record_id):
             st.success(f"✅ تم حذف السند {record_id}")
             st.rerun()
     with col_no:
-        if st.button("❌ إلغاء", use_container_width=True, key=f"cancel_del_emp_{record_id}"):
+        if st.button("❌ إلغاء", use_container_width=True, key=f"cancel_del_inline_{record_id}"):
             st.session_state["delete_employee_record"] = None
             st.rerun()
 
 # ==================== تبويب: إضافة سند ====================
 def render_add_record_tab():
     st.subheader("➕ إضافة سند جديد")
-    
     employees_df = load_employees()
     events_list = load_events()
     
@@ -355,16 +295,12 @@ def render_add_record_tab():
     employee_names = employees_df["الاسم"].astype(str).tolist()
     
     col1, col2 = st.columns(2)
-    
     with col1:
         record_date = st.date_input("📅 التاريخ *", value=date.today(), key="new_emp_record_date")
-        
         selected_emp = st.selectbox("👤 اسم الموظف *", ["-- اختر --"] + employee_names, key="new_emp_record_employee")
-        
         if selected_emp != "-- اختر --":
             rank = get_employee_rank(selected_emp)
             st.info(f"**الرتبة الوظيفية:** {rank}")
-    
     with col2:
         selected_event = st.selectbox("📋 الحدث *", ["-- اختر --"] + events_list, key="new_emp_record_event")
     
@@ -372,7 +308,6 @@ def render_add_record_tab():
     action = st.text_area("⚖️ الإجراء المتخذ", placeholder="مثال: إنذار شفهي، خصم يوم...", key="new_emp_record_action")
     
     st.markdown("---")
-    
     submitted = st.button("💾 حفظ السند", use_container_width=True, type="primary", key="save_new_emp_record")
     
     if submitted:
@@ -386,7 +321,6 @@ def render_add_record_tab():
         else:
             rank = get_employee_rank(selected_emp)
             new_id = get_next_record_id()
-            
             new_row = {
                 "رقم السند": new_id,
                 "التاريخ": str(record_date),
@@ -396,11 +330,9 @@ def render_add_record_tab():
                 "ملاحظات": notes.strip(),
                 "الإجراء المتخذ": action.strip(),
             }
-            
             full_df = load_records()
             full_df = pd.concat([full_df, pd.DataFrame([new_row])], ignore_index=True)
             save_records(full_df)
-            
             st.success(f"✅ تم حفظ السند **{new_id}** — {selected_emp} — {selected_event}")
             st.balloons()
             st.rerun()
@@ -438,10 +370,8 @@ def render_records_tab():
         (filtered["التاريخ_dt"].dt.date >= date_from) & 
         (filtered["التاريخ_dt"].dt.date <= date_to)
     ]
-    
     if filter_emp != "الكل":
         filtered = filtered[filtered["اسم الموظف"].astype(str) == filter_emp]
-    
     if filter_event != "الكل":
         filtered = filtered[filtered["الحدث"].astype(str) == filter_event]
     
@@ -452,7 +382,6 @@ def render_records_tab():
         st.warning("⚠️ مفيش سندات مطابقة للفلاتر")
     else:
         filtered_display = filtered.drop(columns=["التاريخ_dt"], errors="ignore").reset_index(drop=True)
-        
         st.caption("💡 علّم على ☑ في عمود 'اختر' لتعديل أو حذف السند")
         
         df_editor = filtered_display.copy()
@@ -479,7 +408,7 @@ def render_records_tab():
         )
         
         st.markdown("---")
-        st.markdown("### 🔧 إجراءات على السندات المحددة")
+        st.markdown("### 🔧 إجراءات")
         
         col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 3])
         
@@ -508,14 +437,22 @@ def render_records_tab():
                     st.rerun()
         
         with col_btn3:
-            st.markdown("💡 **ملاحظة:** لتعديل أو حذف سند، علّم على ☑ جنبه واضغط الزر المناسب")
-
+            st.markdown("💡 **ملاحظة:** الفورم بيظهر تحت الجدول")
+        
+        # ==================== الفورمات تظهر هنا تحت الجدول ====================
+        if st.session_state.get("edit_employee_record"):
+            st.markdown("---")
+            render_edit_form_inline(st.session_state["edit_employee_record"])
+        
+        if st.session_state.get("delete_employee_record"):
+            st.markdown("---")
+            render_delete_form_inline(st.session_state["delete_employee_record"])
+            
 # ==================== تبويب: البحث عن موظف ====================
 def render_search_tab():
     st.subheader("🔍 البحث عن موظف")
     
     employees_df = load_employees()
-    
     if employees_df.empty:
         st.warning("⚠️ مفيش موظفين مسجلين")
         return
@@ -535,8 +472,6 @@ def render_search_tab():
         return
     
     st.markdown("---")
-    
-    # بيانات الموظف
     rank = get_employee_rank(selected_emp)
     
     st.markdown(f"""
@@ -547,7 +482,6 @@ def render_search_tab():
     </div>
     """, unsafe_allow_html=True)
     
-    # إحصائيات
     stats = get_employee_stats(selected_emp, search_from, search_to)
     
     st.markdown(f"### 📊 إحصائيات من {search_from} إلى {search_to}")
@@ -558,16 +492,10 @@ def render_search_tab():
     with col2:
         st.metric("📅 الفترة", f"{(search_to - search_from).days} يوم")
     
-    # تفصيل الأحداث
     if stats["events_breakdown"]:
         st.markdown("---")
         st.markdown("### 📋 تفصيل الأحداث")
-        
-        breakdown = stats["events_breakdown"]
-        
-        # نرتب حسب العدد
-        sorted_breakdown = sorted(breakdown.items(), key=lambda x: x[1], reverse=True)
-        
+        sorted_breakdown = sorted(stats["events_breakdown"].items(), key=lambda x: x[1], reverse=True)
         for event, count in sorted_breakdown:
             st.markdown(f"""
             <div style="background: rgba(20,20,40,0.6); border-right: 4px solid #00e5ff; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
@@ -592,14 +520,12 @@ def render_reports_tab():
     st.subheader("📊 التقارير والإحصائيات")
     
     df = load_records()
-    
     if df.empty:
         st.info("📭 مفيش بيانات للتقارير")
         return
     
     df["التاريخ_dt"] = pd.to_datetime(df["التاريخ"], errors="coerce")
     
-    # فلاتر
     st.markdown("### 📅 فلتر الفترة")
     col1, col2 = st.columns(2)
     with col1:
@@ -619,8 +545,6 @@ def render_reports_tab():
         return
     
     st.markdown("---")
-    
-    # ملخص
     st.markdown("### 💡 ملخص الفترة")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("📋 عدد السندات", len(filtered))
@@ -629,8 +553,6 @@ def render_reports_tab():
     col4.metric("📅 الفترة", f"{(date_to - date_from).days} يوم")
     
     st.markdown("---")
-    
-    # إحصائيات الأحداث
     st.markdown("### 📊 إحصائيات الأحداث")
     event_stats = get_event_stats(date_from, date_to)
     
@@ -662,23 +584,15 @@ def render_reports_tab():
         st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("---")
-    
-    # إحصائيات الموظفين
     st.markdown("### 👥 إحصائيات الموظفين (الأكثر أحداث)")
-    
     emp_stats = get_all_employees_stats(date_from, date_to)
-    
     if not emp_stats.empty:
         st.dataframe(emp_stats, use_container_width=True, hide_index=True)
     
     st.markdown("---")
-    
-    # إحصائيات حسب الرتبة
     st.markdown("### 🏷️ إحصائيات حسب الرتبة الوظيفية")
-    
     by_rank = filtered.groupby("الرتبة").size().reset_index(name="عدد الأحداث")
     by_rank = by_rank.sort_values("عدد الأحداث", ascending=False)
-    
     if not by_rank.empty:
         st.dataframe(by_rank, use_container_width=True, hide_index=True)
 
@@ -686,35 +600,23 @@ def render_reports_tab():
 def render_settings_tab():
     st.subheader("⚙️ الإعدادات")
     
-    # ==================== إدارة الموظفين ====================
+    # إدارة الموظفين
     st.markdown("### 👥 إدارة الموظفين")
-    
     employees_df = load_employees()
     
-    if employees_df.empty:
-        st.info("📭 مفيش موظفين مسجلين")
-    else:
+    if not employees_df.empty:
         st.markdown(f"**عدد الموظفين: {len(employees_df)}**")
-        
-        # تصنيف حسب الرتبة
         ranks = employees_df["الرتبة"].value_counts().to_dict()
-        
         for rank, count in ranks.items():
             st.markdown(f"- 🏷️ **{rank}**: {count} موظف")
         
         st.markdown("---")
-        
-        # جدول الموظفين مع بحث
         search_emp = st.text_input("🔍 بحث بالاسم", "", key="settings_search_emp")
-        
         filtered_emps = employees_df.copy()
         if search_emp:
-            filtered_emps = filtered_emps[
-                filtered_emps["الاسم"].astype(str).str.contains(search_emp, case=False)
-            ]
+            filtered_emps = filtered_emps[filtered_emps["الاسم"].astype(str).str.contains(search_emp, case=False)]
         
         st.markdown(f"### 📋 قائمة الموظفين ({len(filtered_emps)})")
-        
         for i, row in filtered_emps.iterrows():
             col1, col2, col3 = st.columns([3, 3, 1])
             with col1:
@@ -730,10 +632,7 @@ def render_settings_tab():
                     st.rerun()
     
     st.markdown("---")
-    
-    # ==================== إضافة موظف جديد ====================
     st.markdown("### ➕ إضافة موظف جديد")
-    
     col1, col2 = st.columns([2, 2])
     with col1:
         new_emp_name = st.text_input("اسم الموظف", placeholder="مثال: محمد أحمد", key="settings_new_emp")
@@ -746,10 +645,7 @@ def render_settings_tab():
             if new_emp_name.strip() in full_df["الاسم"].astype(str).tolist():
                 st.warning(f"⚠️ الموظف {new_emp_name} موجود بالفعل")
             else:
-                new_row = pd.DataFrame([{
-                    "الاسم": new_emp_name.strip(),
-                    "الرتبة": new_emp_rank.strip(),
-                }])
+                new_row = pd.DataFrame([{"الاسم": new_emp_name.strip(), "الرتبة": new_emp_rank.strip()}])
                 full_df = pd.concat([full_df, new_row], ignore_index=True)
                 save_employees(full_df)
                 st.success(f"✅ تم إضافة الموظف: {new_emp_name}")
@@ -758,12 +654,9 @@ def render_settings_tab():
             st.error("⚠️ املأ الاسم والرتبة")
     
     st.markdown("---")
-    
-    # ==================== إدارة الأحداث ====================
     st.markdown("### 📋 إدارة الأحداث (القائمة المنسدلة)")
     
     events_list = load_events()
-    
     st.markdown(f"**عدد الأحداث: {len(events_list)}**")
     
     for i, ev in enumerate(events_list):
@@ -778,8 +671,6 @@ def render_settings_tab():
                 st.rerun()
     
     st.markdown("---")
-    
-    # إضافة حدث جديد
     col1, col2 = st.columns([3, 1])
     with col1:
         new_event_name = st.text_input("حدث جديد", placeholder="مثال: تأخر متكرر", key="settings_new_event")
@@ -799,13 +690,9 @@ def render_settings_tab():
                 st.error("⚠️ اكتب اسم الحدث")
     
     st.markdown("---")
-    
-    # ==================== معلومات ====================
     st.markdown("### ℹ️ معلومات")
-    
     records = load_records()
     employees = load_employees()
-    
     col1, col2, col3 = st.columns(3)
     col1.metric("👥 عدد الموظفين", len(employees))
     col2.metric("📋 عدد الأحداث", len(load_events()))
@@ -815,7 +702,7 @@ def render_settings_tab():
 def render_employees_section():
     init_employees_files()
     
-    st.title("👥 قسم قيم موظفين المخزن")
+    st.title("👥 قسم تقييم موظفين المخزن")
     st.markdown("### متابعة سلوك وأداء الموظفين")
     st.markdown("---")
     
@@ -841,12 +728,5 @@ def render_employees_section():
     
     with tab4:
         render_settings_tab()
-
-# ==================== النوافذ المنبثقة ====================
-if st.session_state.get("edit_employee_record"):
-    edit_record_dialog(st.session_state["edit_employee_record"])
-
-if st.session_state.get("delete_employee_record"):
-    delete_record_dialog(st.session_state["delete_employee_record"])
 
 # ==================== نهاية القسم ====================
